@@ -1,0 +1,10 @@
+[user]
+	name = okym
+	email = yu.6.425@icloud.com
+[core]
+	editor = vim
+[color]
+	diff = auto
+	status = auto
+	branch = auto
+	ui = auto
