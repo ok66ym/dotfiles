@@ -11,3 +11,6 @@ export PATH="${AQUA_ROOT_DIR:-$HOME/.local/share/aqua}/bin:$PATH"
 
 # miseのshimsへのPATHを通す
 export PATH="$HOME/.local/share/mise/shims:$PATH"
+
+# mise有効化コマンド
+eval "$(mise activate zsh)"
