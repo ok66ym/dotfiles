@@ -17,25 +17,26 @@ else
 fi
 
 echo "Running brew bundle..."
+echo "Kindle is not supported by brew, so install App from App Store manually."
 # .Brewfileはホームディレクトリに展開される
 brew bundle --global
 
 # --- zinit ---
 if [ ! -d "${HOME}/.zinit" ]; then
-    echo "⚡ Installing zinit..."
+    echo "Installing zinit..."
     bash -c "$(curl --fail --show-error --silent --location https://raw.githubusercontent.com/zdharma-continuum/zinit/HEAD/scripts/install.sh)"
 else
-    echo "⚡ zinit is already installed."
+    echo "zinit is already installed."
 fi
 
 # --- Helper Scripts ---
 # chezmoi source-pathでスクリプトの絶対パスを取得できる
 SCRIPTS_DIR="$(chezmoi source-path)/private_dot_scripts"
 
-echo "📦 Installing mise tools (languages, frameworks)..."
+echo "Installing mise tools (languages, frameworks)..."
 bash "${SCRIPTS_DIR}/_mise.sh"
 
-echo "💻 Installing VS Code extensions..."
+echo "Installing VS Code extensions..."
 bash "${SCRIPTS_DIR}/_vscode.sh"
 
-echo "✅ Setup complete!"
+echo " Setup complete!"

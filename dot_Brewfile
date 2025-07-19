@@ -22,7 +22,7 @@ cask "iterm2"
 cask "obsidian"
 cask "coteditor"
 cask "logi-options-plus"
-cask "kindle"
+# cask "kindle" # Kindleをbrewでのインストールをサポートしていない。
 cask "rectangle"
 cask "raycast"
 
