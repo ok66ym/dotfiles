@@ -1,15 +1,23 @@
 # 🍎Install chezmoi(macOS)
-[Install chezmoi](https://www.chezmoi.io/install/) with Homebrew
+[Install chezmoi](https://www.chezmoi.io/install/) with Homebrew.
+(need to have Homebrew installed)
 ```sh
 brew install chezmoi
 ```
-# 🛠️setup
-
+# ⚙️setup
+place repo under chezmoi management
 ```
 chezmoi init https://github.com/ok66ym/dotfiles-p.git
 ```
 
 # 🚀apply dotfiles
+Extract dotfile with verbose output
+
 ```sh
-chezmoi apply
+chezmoi apply -v # -v: to verbose output
+```
+# 🛠️Debug
+Output details when run chezmoi apply
+```sh
+chezmoi apply -v --debug
 ```
