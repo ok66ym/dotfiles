@@ -1,6 +1,13 @@
 ########################################
 # プラグイン管理
 ########################################
+# zinit annex (拡張機能)
+  zinit light-mode for \
+      zdharma-continuum/zinit-annex-as-monitor \
+      zdharma-continuum/zinit-annex-bin-gem-node \
+      zdharma-continuum/zinit-annex-patch-dl \
+      zdharma-continuum/zinit-annex-rust
+
 # Powerlevel10k (プロンプトテーマ)
 zinit ice depth=1; zinit light romkatv/powerlevel10k
 

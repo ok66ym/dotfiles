@@ -5,11 +5,13 @@ set -eu
 
 echo "🚀 Starting setup..."
 
-# --- Homebrew ---
+########################################
+# Homebrew
+########################################
 if ! command -v brew &> /dev/null; then
     echo "Installing Homebrew..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    # M1/M2 Macの場合、brewのパスを通す処理が必要
+    # Apple Silicon Macの場合、brewのパスを通す処理が必要
     (echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> ~/.zprofile
     eval "$(/opt/homebrew/bin/brew shellenv)"
 else
@@ -17,26 +19,31 @@ else
 fi
 
 echo "Running brew bundle..."
-echo "Kindle is not supported by brew, so install App from App Store manually."
+echo "Note: Kindle is installed from the App Store, not via Homebrew."
 # .Brewfileはホームディレクトリに展開される
 brew bundle --global
 
-# --- zinit ---
-if [ ! -d "${HOME}/.zinit" ]; then
-    echo "Installing zinit..."
-    bash -c "$(curl --fail --show-error --silent --location https://raw.githubusercontent.com/zdharma-continuum/zinit/HEAD/scripts/install.sh)"
+########################################
+# zinit
+########################################
+ZINIT_HOME="${HOME}/.local/share/zinit/zinit.git"
+
+if [ ! -d "$ZINIT_HOME" ]; then
+    echo "Installing zinit by cloning repository..."
+    # .zshrcを自動編集させないよう、リポジトリをcloneするだけにする
+    git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
 else
     echo "zinit is already installed."
 fi
 
-# --- Helper Scripts ---
+########################################
+# 言語やフレームワークのインストール
+########################################
 # chezmoi source-pathでスクリプトの絶対パスを取得できる
 SCRIPTS_DIR="$(chezmoi source-path)/private_dot_scripts"
 
 echo "Installing mise tools (languages, frameworks)..."
 bash "${SCRIPTS_DIR}/_mise.sh"
 
-echo "Installing VS Code extensions..."
-bash "${SCRIPTS_DIR}/_vscode.sh"
 
-echo " Setup complete!"
+echo "Setup complete!"
