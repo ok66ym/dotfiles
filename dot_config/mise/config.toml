@@ -1,0 +1,6 @@
+[settings]
+idiomatic_version_file_enable_tools = []
+
+[tools]
+postgres = "17.5"
+ruby = "3"
