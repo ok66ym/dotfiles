@@ -1,0 +1,6 @@
+# Go
+export GOPATH=$(go env GOPATH)
+export PATH=$PATH:$GOPATH/bin
+
+# EC2のインスタンスID
+export DEV_EC2_INSTANCE_ID=i-0e2584729052b5813
