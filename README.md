@@ -14,7 +14,7 @@ chezmoi init https://github.com/ok66ym/dotfiles-p.git
 Extract dotfile with verbose output
 
 ```sh
-chezmoi apply -v # -v: to verbose output
+chezmoi apply -v
 ```
 # 🛠️Debug
 Output details when run chezmoi apply
