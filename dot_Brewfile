@@ -1,3 +1,4 @@
+# CLIツール
 brew "aqua"
 brew "chezmoi"
 brew "fd"
@@ -12,6 +13,19 @@ brew "node"
 brew "readline"
 brew "python@3.13"
 brew "tmux"
+brew "wget"
+
+# GUI Apps
+cask "google-chrome"
+cask "visual-studio-code"
+cask "iterm2"
+cask "obsidian"
+cask "coteditor"
+cask "logi-options-plus"
+cask "kindle"
+cask "rectangle"
+cask "raycast"
+
 vscode "eamodio.gitlens"
 vscode "github.copilot"
 vscode "github.copilot-chat"

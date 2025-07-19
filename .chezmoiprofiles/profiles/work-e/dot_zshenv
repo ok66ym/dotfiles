@@ -1,4 +1,0 @@
-export LANG=ja_JP.UTF-8
-# EC2のインスタンスID
-export DEV_EC2_INSTANCE_ID=i-0e2584729052b5813
-export INTEGRATION_NAME=oka-yuma
