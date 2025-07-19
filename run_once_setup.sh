@@ -39,11 +39,9 @@ fi
 ########################################
 # 言語やフレームワークのインストール
 ########################################
-# chezmoi source-pathでスクリプトの絶対パスを取得できる
-SCRIPTS_DIR="$(chezmoi source-path)/private_dot_scripts"
+SCRIPTS_DIR="${HOME}/.local/share/chezmoi/private_dot_scripts"
 
 echo "Installing mise tools (languages, frameworks)..."
 bash "${SCRIPTS_DIR}/_mise.sh"
-
 
 echo "Setup complete!"

@@ -7,8 +7,6 @@ if ! command -v mise &> /dev/null; then
     exit 1
 fi
 
-echo "Installing tools defined in mise config..."
-# 設定ファイルに記述されているプラグインをインストール
-mise plugins install
-# 設定ファイルに記述されているバージョンをインストール
+echo "Installing mise tools (languages, frameworks)..."
+# 設定ファイル(/.config/mise/config.toml)に記述されているバージョンをインストール
 mise install
