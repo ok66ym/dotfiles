@@ -1,3 +1,7 @@
+[user]
+  name = okym
+  email = yu.6.425@icloud.com
+
 [core]
 	editor = vim
 [color]
@@ -5,6 +9,3 @@
 	status = auto
 	branch = auto
 	ui = auto
-
-[include]
-    path = ~/.gitconfig.local
