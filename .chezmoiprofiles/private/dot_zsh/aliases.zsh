@@ -21,3 +21,6 @@ alias gb='git branch'
 alias gc='git clone'
 alias gf='git fetch'
 alias gl="git log"
+
+# 共通エイリアスを読み込む
+{{ include "zsh/common_aliases.zsh.part" . | indent 0 }}
