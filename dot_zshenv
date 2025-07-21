@@ -1,7 +1,7 @@
 # PosgreSQL用の環境変数
-export LDFLAGS="-L$(brew --prefix icu4c)/lib -L$(brew --prefix openssl)/lib"
-export CPPFLAGS="-I$(brew --prefix icu4c)/include -I$(brew --prefix openssl)/include"
-export PKG_CONFIG_PATH="$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix openssl)/lib/pkgconfig"
+# export LDFLAGS="-L$(brew --prefix icu4c)/lib -L$(brew --prefix openssl)/lib"
+# export CPPFLAGS="-I$(brew --prefix icu4c)/include -I$(brew --prefix openssl)/include"
+# export PKG_CONFIG_PATH="$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix openssl)/lib/pkgconfig"
 
 # aquaでインストールしたツールのPATHを通す
 export PATH="${AQUA_ROOT_DIR:-$HOME/.local/share/aqua}/bin:$PATH"
