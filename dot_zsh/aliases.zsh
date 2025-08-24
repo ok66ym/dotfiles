@@ -7,6 +7,7 @@ alias vim='nvim'
 alias la='ls -a'
 alias ls='ls -G'
 
+# gitコマンド
 alias gst='git status'
 alias gsh='git stash'
 alias gshu='git stash -u'
@@ -24,5 +25,9 @@ alias gc='git clone'
 alias gf='git fetch'
 alias gl="git log"
 
+# GitHub CLI
 alias prv="gh pr view"
 alias prw="gh pr create --w"
+
+# pnpm
+alias pn='pnpm'
