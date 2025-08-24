@@ -1,6 +1,9 @@
 ########################################
 # エイリアス
 ########################################
+alias vi='nvim'
+alias vim='nvim'
+
 alias la='ls -a'
 alias ls='ls -G'
 
@@ -15,8 +18,11 @@ alias gchb='git checkout -b'
 alias gps='git push origin'
 alias gpsb='git push origin $(git branch --show-current)'
 alias gpl='git pull origin'
-alias gplb='git pull --rebase origin $(git branch --show-current)'
+alias gplb='git pull origin $(git branch --show-current)'
 alias gb='git branch'
 alias gc='git clone'
 alias gf='git fetch'
 alias gl="git log"
+
+alias prv="gh pr view"
+alias prw="gh pr create --w"
