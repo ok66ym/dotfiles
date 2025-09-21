@@ -11,7 +11,7 @@ function fzf-select-history() {
 zle -N fzf-select-history
 bindkey '^r' fzf-select-history
 
-# Ctrl+e: ディレクトリ移動履歴検索
+# Ctrl+w: ディレクトリ移動履歴検索
 function fzf-cdr() {
   local selected_dir
   selected_dir=$(cdr -l | sed 's/^[0-9*]* *//' | fzf --reverse --height 50%)
@@ -23,7 +23,7 @@ function fzf-cdr() {
   fi
 }
 zle -N fzf-cdr
-bindkey '^e' fzf-cdr
+bindkey '^w' fzf-cdr
 
 # Ctrl+f: git add をインタラクティブに実行
 function fzf-add() {
