@@ -62,6 +62,18 @@ function fzf-branch() {
 zle -N fzf-branch
 bindkey '^b' fzf-branch
 
+# Ctrl+g: Gitプロジェクトの切り替え
+function fzf-ghq() {
+    moveto=$(ghq root)/$(ghq list | fzf)
+
+    if [[ "${moveto}" != "$(ghq root)/" ]]
+    then
+       cd $moveto
+    fi
+}
+zle -N fzf-ghq
+bindkey '^g' fzf-ghq
+
 # tmux: セッション切り替え/作成
 function ss(){
   ID="`tmux list-sessions`"

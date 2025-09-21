@@ -31,3 +31,6 @@ alias prw="gh pr create --w"
 
 # pnpm
 alias pn='pnpm'
+
+# zコマンド
+alias j='z'
