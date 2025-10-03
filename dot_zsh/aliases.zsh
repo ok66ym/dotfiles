@@ -23,6 +23,7 @@ alias gplb='git pull origin $(git branch --show-current)'
 alias gb='git branch'
 alias gc='git clone'
 alias gf='git fetch'
+alias gm='git merge'
 alias gl="git log"
 
 # GitHub CLI
@@ -32,5 +33,5 @@ alias prw="gh pr create --w"
 # pnpm
 alias pn='pnpm'
 
-# zコマンド
-alias j='z'
+# chezmoi
+alias ch='chezmoi'
