@@ -109,3 +109,129 @@ function ss(){
     fi
   fi
 }
+
+# git reset実行時にオプション確認用の関数
+function git-reset(){
+  if [ "$#" -eq 0 ]; then
+    echo "以下のオプションを指定して操作を取り消す"
+    echo "reset --hard：add, commit, 修正内容の取り消し"
+    echo "reset --mixed：add, commitの取り消し"
+    echo "reset --soft：commitのみの取り消し"
+    return 0
+  fi
+# 関数内で元のコマンド名（git reset）を呼び出す
+  git reset "$@"
+}
+
+function git-pull() {
+    # 1. 現在のブランチ名を取得
+    local current_branch
+    # 2>/dev/null はエラーメッセージ（Gitリポジトリでない場合など）を非表示にする
+    current_branch=$(git branch --show-current 2>/dev/null)
+
+    if [ -z "$current_branch" ]; then
+        echo "エラー: 現在のディレクトリはGitリポジトリではありません。"
+        return 1
+    fi
+
+    echo ""
+    echo "現在のブランチ: >> ${current_branch} "
+    echo ""
+    echo -n "このブランチでpullしますか？(y/n) または、pushするブランチ名 | origin/ブランチ名を入力: "
+    read -r response
+
+    local target_ref
+    local git_command
+    
+    # 2. ユーザーの入力に基づいて pull する参照先を決定
+    case "$response" in
+        # 'y' または 'Y' の場合 (現在のブランチ)
+        [yY] )
+            target_ref="$current_branch"
+            git_command="git pull origin ${target_ref}"
+            ;;
+        # 'n' または 'N' の場合 (キャンセル)
+        [nN] )
+            echo "処理を中断しました。"
+            return 0
+            ;;
+        # その他の文字列の場合 (ブランチ名または origin/ブランチ名)
+        * )
+            if [ -z "$response" ]; then
+                echo "無効な入力です。処理を中断します。"
+                return 1
+            fi
+            
+            # 入力に "origin/" が含まれているかをチェック
+            if [[ "$response" == origin/* ]]; then
+                # origin/ブランチ名 の場合、コマンドは git pull origin/ブランチ名
+                target_ref="$response"
+                git_command="git pull ${target_ref}"
+            else
+                # 単なるブランチ名の場合、コマンドは git pull origin ブランチ名
+                target_ref="$response"
+                git_command="git pull origin ${target_ref}"
+            fi
+            ;;
+    esac
+
+    # 実行
+    eval "$git_command"
+}
+
+function git-push() {
+    # 1. 現在のブランチ名を取得
+    local current_branch
+    # 2>/dev/null はエラーメッセージ（Gitリポジトリでない場合など）を非表示にする
+    current_branch=$(git branch --show-current 2>/dev/null)
+
+    if [ -z "$current_branch" ]; then
+        echo "エラー: 現在のディレクトリはGitリポジトリではありません。"
+        return 1
+    fi
+
+    echo ""
+    echo "現在のブランチ: >> ${current_branch} "
+    echo ""
+    echo -n "このブランチでpushしますか？(y/n) または、pushするブランチ名 | origin/ブランチ名を入力: "
+    read -r response
+
+    local target_ref
+    local git_command
+    
+    # 2. ユーザーの入力に基づいて push する参照先を決定
+    case "$response" in
+        # 'y' または 'Y' の場合 (現在のブランチ)
+        [yY] )
+            target_ref="$current_branch"
+            git_command="git push origin ${target_ref}"
+            ;;
+        # 'n' または 'N' の場合 (キャンセル)
+        [nN] )
+            echo "処理を中断しました。"
+            return 0
+            ;;
+        # その他の文字列の場合 (ブランチ名または origin/ブランチ名)
+        * )
+            if [ -z "$response" ]; then
+                echo "無効な入力です。処理を中断します。"
+                return 1
+            fi
+            
+            # 入力に "origin/" が含まれているかをチェック
+            if [[ "$response" == origin/* ]]; then
+                # origin/ブランチ名 の場合、コマンドは git push origin/ブランチ名
+                target_ref="$response"
+                git_command="git push ${target_ref}"
+            else
+                # 単なるブランチ名の場合、コマンドは git push origin ブランチ名
+                target_ref="$response"
+                git_command="git push origin ${target_ref}"
+            fi
+            ;;
+    esac
+
+    # 実行
+    eval "$git_command"
+}
+
