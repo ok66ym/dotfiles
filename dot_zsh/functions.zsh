@@ -146,7 +146,7 @@ function git-pull() {
     # 2. ユーザーの入力に基づいて pull する参照先を決定
     case "$response" in
         # 'y' または 'Y' の場合 (現在のブランチ)
-        [yY] )
+        [yY]|"")
             target_ref="$current_branch"
             git_command="git pull origin ${target_ref}"
             ;;
@@ -202,7 +202,7 @@ function git-push() {
     # 2. ユーザーの入力に基づいて push する参照先を決定
     case "$response" in
         # 'y' または 'Y' の場合 (現在のブランチ)
-        [yY] )
+        [yY]|"" )
             target_ref="$current_branch"
             git_command="git push origin ${target_ref}"
             ;;
