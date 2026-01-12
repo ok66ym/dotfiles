@@ -9,6 +9,7 @@ alias ls='ls -G'
 
 # gitコマンド
 alias status='git status'
+alias add='git add'
 alias stash='git stash'
 alias switch='git switch'
 alias commit='git commit'
@@ -28,6 +29,9 @@ alias reflog='git reflog'
 # GitHub CLI
 alias prv="gh pr view"
 alias prw="gh pr create --w"
+
+# リポジトリ作成
+alias gnew="start-git-project"
 
 # pnpm
 alias pn='pnpm'

@@ -235,3 +235,74 @@ function git-push() {
     eval "$git_command"
 }
 
+# 新規リポジトリを作成する関数(リモート→ローカル)
+function start-git-project() {
+  # --- ヘルプ ---
+  function _gnew_show_help() {
+    echo "使用法: gnew <リポジトリ名> [オプション]"
+    echo ""
+    echo "デフォルト:"
+    echo "  - 公開範囲:      Private (非公開)"
+    echo "  - 初期ファイル:  なし (空のリポジトリ)"
+    echo "  - ghqでクローン: SSH方式"
+    echo ""
+    echo "オプション: オプションを指定するとfirst commitが作成される"
+    echo "  --add-readme           README.md を作成する"
+    echo "  --public               Public (公開) リポジトリとして作成"
+    echo "  --description \"文\"   リポジトリの説明文を設定"
+    echo "  --gitignore <言語>     .gitignoreを追加 (例: Python, Node, Go)"
+    echo "  --license <key>        ライセンスを追加 (例: mit, apache-2.0)"
+  }
+
+  # --- ヘルプ表示の判定 ---
+  if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$2" = "-h" ] || [ "$2" = "--help" ]; then
+    _gnew_show_help
+    return 0
+  fi
+
+  # --- 変数設定 ---
+  local repo_name=$1
+  shift # 第一引数を取り除く
+
+  local user="ok66ym"
+  
+  # リポジトリ名のスラッシュ対策
+  if [[ "$repo_name" == *"/"* ]]; then
+    repo_name="${repo_name##*/}"
+  fi
+  local target_repo="${user}/${repo_name}"
+
+  echo "🔨 Creating private repository: ${target_repo}..."
+
+  # --- GitHubリポジトリ作成 ---
+  gh repo create "$target_repo" \
+    --private \
+    --clone=false \
+    "$@"
+
+  if [ $? -ne 0 ]; then
+    echo "Failed to create repository."
+    return 1
+  fi
+
+  # --- ghq で SSH クローン ---
+  echo "📥 Cloning via SSH with ghq..."
+  ghq get "git@github.com:${target_repo}.git"
+
+  # --- ディレクトリへ移動 ---
+  local repo_path
+  repo_path=$(ghq list -p -e "github.com/${target_repo}")
+  
+  if [ -d "$repo_path" ]; then
+    cd "$repo_path"
+    
+    # 状況確認: READMEがない(空の)場合は案内を出す
+    if [ ! -f "README.md" ]; then
+       echo "Note: You created an empty repository."
+       echo "   Run 'echo \"# ${repo_name}\" >> README.md' and commit to start."
+    fi
+  else
+    echo "Error: Directory not found at $repo_path"
+    return 1
+  fi
+}
