@@ -7,7 +7,7 @@ brew install chezmoi
 # ⚙️setup
 place repo under chezmoi management
 ```
-chezmoi init https://github.com/ok66ym/dotfiles-p.git
+chezmoi init https://github.com/ok66ym/dotfiles.git
 ```
 
 # 🚀apply dotfiles
