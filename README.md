@@ -4,7 +4,7 @@
 ```sh
 brew install chezmoi
 ```
-# ⚙️setup
+# ⚙️chezmoi setup
 place repo under chezmoi management
 ```
 chezmoi init https://github.com/ok66ym/dotfiles.git
@@ -16,8 +16,14 @@ Extract dotfile with verbose output
 ```sh
 chezmoi apply -v
 ```
-# 🛠️Debug
+## 🛠️Debug
 Output details when run chezmoi apply
 ```sh
 chezmoi apply -v --debug
+```
+
+# apply dotfiles
+serup dotfiles and install tools
+```sh
+sh run_once_setup.sh
 ```
