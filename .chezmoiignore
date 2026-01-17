@@ -1,3 +1,38 @@
-dot_ssh/id_*
-dot_ssh/known_*
-dot_DS_Store
+# --- システム・一時ファイル ---
+**/.DS_Store
+**/.git
+**/.gitignore
+**/Thumbs.db
+
+# --- 機密情報・クレデンシャル ---
+.ssh/id_*
+.ssh/known_hosts
+.aws
+.azure
+.gcloud
+.kube/config
+.netrc
+.env
+.env.local
+
+# --- 履歴ファイル（コマンド履歴に秘密情報が含まれる可能性があるため） ---
+.bash_history
+.zsh_history
+.python_history
+.mysql_history
+.lesshst
+
+# --- アプリケーション固有の機密設定 ---
+.claude/settings.json
+.claude/config.json
+.npmrc
+.gem/credentials
+
+# --- その他 ---
+# 必要に応じてDownloadsやtmpなどを指定
+Downloads
+tmp
+
+# --- privateで管理するので念のため除外 ---
+.config/gh/config.yml
+.config/raycast

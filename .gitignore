@@ -1,0 +1,8 @@
+# chezmoiが生成する一時的なファイルなど
+.chezmoitemplates
+.chezmoidata
+
+# 万が一 add してしまった場合の保険 (chezmoiの命名規則に対応)
+private_dot_ssh/id_*
+private_dot_aws/**
+dot_env
