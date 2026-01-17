@@ -137,7 +137,7 @@ function git-pull() {
     echo ""
     echo "現在のブランチ: >> ${current_branch} "
     echo ""
-    echo -n "このブランチでpullしますか？(y/n) または、pushするブランチ名 | origin/ブランチ名を入力: "
+    echo -n "このブランチでpullしますか？(y/n) または、pullするブランチ名 | origin/ブランチ名を入力: "
     read -r response
 
     local target_ref
