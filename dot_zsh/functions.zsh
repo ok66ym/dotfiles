@@ -137,12 +137,12 @@ function git-pull() {
     echo ""
     echo "現在のブランチ: >> ${current_branch} "
     echo ""
-    echo -n "このブランチでpullしますか？(y/n) または、pullするブランチ名 | origin/ブランチ名を入力: "
+    echo -n "このブランチでpullしますか？(y/n) または、pullするブランチ名を指定する: "
     read -r response
 
     local target_ref
     local git_command
-    
+
     # 2. ユーザーの入力に基づいて pull する参照先を決定
     case "$response" in
         # 'y' または 'Y' の場合 (現在のブランチ)
@@ -155,27 +155,22 @@ function git-pull() {
             echo "処理を中断しました。"
             return 0
             ;;
-        # その他の文字列の場合 (ブランチ名または origin/ブランチ名)
+        # その他の文字列の場合 (ブランチ名指定とみなす)
         * )
             if [ -z "$response" ]; then
                 echo "無効な入力です。処理を中断します。"
                 return 1
             fi
-            
-            # 入力に "origin/" が含まれているかをチェック
-            if [[ "$response" == origin/* ]]; then
-                # origin/ブランチ名 の場合、コマンドは git pull origin/ブランチ名
-                target_ref="$response"
-                git_command="git pull ${target_ref}"
-            else
-                # 単なるブランチ名の場合、コマンドは git pull origin ブランチ名
-                target_ref="$response"
-                git_command="git pull origin ${target_ref}"
-            fi
+
+            # 【変更点】origin/判定を削除し、単純にブランチ名として扱います
+            # 入力例: "main" -> "git pull origin main"
+            target_ref="$response"
+            git_command="git pull origin ${target_ref}"
             ;;
     esac
 
     # 実行
+    echo "実行コマンド: $git_command"
     eval "$git_command"
 }
 
@@ -193,16 +188,16 @@ function git-push() {
     echo ""
     echo "現在のブランチ: >> ${current_branch} "
     echo ""
-    echo -n "このブランチでpushしますか？(y/n) または、pushするブランチ名 | origin/ブランチ名を入力: "
+    echo -n "このブランチでpushしますか？(y/n) または、pushするブランチ名を入力: "
     read -r response
 
     local target_ref
     local git_command
-    
+
     # 2. ユーザーの入力に基づいて push する参照先を決定
     case "$response" in
         # 'y' または 'Y' の場合 (現在のブランチ)
-        [yY]|"" )
+        [yY]|"")
             target_ref="$current_branch"
             git_command="git push origin ${target_ref}"
             ;;
@@ -211,27 +206,22 @@ function git-push() {
             echo "処理を中断しました。"
             return 0
             ;;
-        # その他の文字列の場合 (ブランチ名または origin/ブランチ名)
+        # その他の文字列の場合 (ブランチ名指定とみなす)
         * )
             if [ -z "$response" ]; then
                 echo "無効な入力です。処理を中断します。"
                 return 1
             fi
-            
-            # 入力に "origin/" が含まれているかをチェック
-            if [[ "$response" == origin/* ]]; then
-                # origin/ブランチ名 の場合、コマンドは git push origin/ブランチ名
-                target_ref="$response"
-                git_command="git push ${target_ref}"
-            else
-                # 単なるブランチ名の場合、コマンドは git push origin ブランチ名
-                target_ref="$response"
-                git_command="git push origin ${target_ref}"
-            fi
+
+            # 【変更点】origin/判定を削除し、単純にブランチ名として扱います
+            # 入力例: "main" -> "git push origin main"
+            target_ref="$response"
+            git_command="git push origin ${target_ref}"
             ;;
     esac
 
     # 実行
+    echo "実行コマンド: $git_command"
     eval "$git_command"
 }
 
