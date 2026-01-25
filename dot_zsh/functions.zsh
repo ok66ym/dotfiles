@@ -125,7 +125,7 @@ function git-reset(){
     echo "  [ハッシュ値] : git log (--oneline) で確認した英数字（例: a1b2c3d）"
     echo "  HEAD^        : 1つ前のコミットに戻る"
     echo "  HEAD~n       : n個前のコミットに戻る（例: HEAD~3）"
-    echo "  HEAD@{n}       : n個前のコミットに戻る（例: HEAD@{3}）"
+    echo "  HEAD@{n}     : n個前のコミットに戻る（例: HEAD@{3}）"
     echo "  ORIG_HEAD    : reset実行直前の状態に戻す（間違えた時用）"
     echo "--------------------------------------------------"
     return 0
