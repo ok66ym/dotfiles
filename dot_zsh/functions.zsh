@@ -113,10 +113,20 @@ function ss(){
 # git reset実行時にオプション確認用の関数
 function git-reset(){
   if [ "$#" -eq 0 ]; then
-    echo "以下のオプションを指定して操作を取り消す"
-    echo "reset --hard：add, commit, 修正内容の取り消し"
-    echo "reset --mixed：add, commitの取り消し"
-    echo "reset --soft：commitのみの取り消し"
+    echo "使用法: git-reset [オプション] [戻り先]"
+    echo "--------------------------------------------------"
+    echo "1. オプション（何を取り消すか）"
+    echo "  --hard  : add, commit, 修正内容すべて"
+    echo "  --mixed : add, commit を取り消す"
+    echo "  --soft  : commit のみを取り消す"
+    echo ""
+    echo "2. 戻り先（どこまで戻るか）"
+    echo "  (省略した場合) : HEAD（現在のコミット）が指定されます"
+    echo "  [ハッシュ値] : git log (--oneline) で確認した英数字（例: a1b2c3d）"
+    echo "  HEAD^        : 1つ前のコミットに戻る"
+    echo "  HEAD~n       : n個前のコミットに戻る（例: HEAD~3）"
+    echo "  ORIG_HEAD    : reset実行直前の状態に戻す（間違えた時用）"
+    echo "--------------------------------------------------"
     return 0
   fi
 # 関数内で元のコマンド名（git reset）を呼び出す
