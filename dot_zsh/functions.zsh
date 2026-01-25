@@ -125,6 +125,7 @@ function git-reset(){
     echo "  [ハッシュ値] : git log (--oneline) で確認した英数字（例: a1b2c3d）"
     echo "  HEAD^        : 1つ前のコミットに戻る"
     echo "  HEAD~n       : n個前のコミットに戻る（例: HEAD~3）"
+    echo "  HEAD@{n}       : n個前のコミットに戻る（例: HEAD@{3}）"
     echo "  ORIG_HEAD    : reset実行直前の状態に戻す（間違えた時用）"
     echo "--------------------------------------------------"
     return 0
@@ -265,7 +266,7 @@ function start-git-project() {
   shift # 第一引数を取り除く
 
   local user="ok66ym"
-  
+
   # リポジトリ名のスラッシュ対策
   if [[ "$repo_name" == *"/"* ]]; then
     repo_name="${repo_name##*/}"
@@ -292,10 +293,10 @@ function start-git-project() {
   # --- ディレクトリへ移動 ---
   local repo_path
   repo_path=$(ghq list -p -e "github.com/${target_repo}")
-  
+
   if [ -d "$repo_path" ]; then
     cd "$repo_path"
-    
+
     # 状況確認: READMEがない(空の)場合は案内を出す
     if [ ! -f "README.md" ]; then
        echo "Note: You created an empty repository."
