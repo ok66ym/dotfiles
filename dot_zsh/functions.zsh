@@ -307,3 +307,9 @@ function start-git-project() {
     return 1
   fi
 }
+
+# iTerm2 Badge用: 現在のフォルダ名だけを user.currentDirName にセット
+iterm2_print_user_vars() {
+  iterm2_set_user_var currentDirName $(basename "$PWD")
+}
+

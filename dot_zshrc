@@ -30,3 +30,6 @@ fi
 
 # 各ツールの有効化
 [[ -f "$ZSH_CONFIG_DIR/evalCommand.zsh" ]] && source "$ZSH_CONFIG_DIR/evalCommand.zsh"
+
+test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
+
