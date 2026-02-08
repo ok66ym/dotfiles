@@ -3,5 +3,5 @@ Include /Users/yumac/.colima/ssh_config
 Host github.com
   HostName github.com
   User git
-  IdentityFile ~/.ssh/id_ed25519_obsidian
+  IdentityFile ~/.ssh/id_ed25519
   IdentitiesOnly yes
