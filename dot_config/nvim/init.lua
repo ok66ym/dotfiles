@@ -1,2 +1,9 @@
--- 行番号を表示
-vim.opt.number = true
+-- プラグインマネージャーの起動 (lazy.lua)
+-- 慣れるまで使用しない
+-- require("config.lazy")
+
+-- 基本オプション (options.lua)
+require("config.options")
+
+-- キーバインド (keymaps.lua)
+require("config.keymaps")
