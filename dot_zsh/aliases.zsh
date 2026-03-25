@@ -3,9 +3,8 @@
 ########################################
 alias vi='nvim'
 alias vim='nvim'
-
 alias la='ls -a'
-alias ls='ls -G'
+alias ls='ls --color=auto -G'
 
 # gitコマンド
 alias g='git'
@@ -37,6 +36,14 @@ alias reflog='git reflog'
 alias amend='git commit --amend'
 alias commit-i='git-rebase-i'
 alias add='git add'
+
+# git系の秘伝スクリプト
+alias pull='git-pull'
+alias push='git-push'
+alias reset='git-reset'
+alias commit-i='git-rebase-i'
+alias file='compare-diff-file'
+alias git-start='start-git-project'
 
 # GitHub CLI
 alias prv="gh pr view"

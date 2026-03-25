@@ -313,3 +313,104 @@ iterm2_print_user_vars() {
   iterm2_set_user_var currentDirName $(basename "$PWD")
 }
 
+# 比較元のブランチを自動判定して現在のブランチとの差分ファイル数を計算する関数
+function compare-diff-file() {
+local current_branch
+  current_branch=$(git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD)
+
+  if [[ -z "$current_branch" ]]; then
+    echo "Error: Failed to get the current branch."
+    return 1
+  fi
+
+  # 1. 比較元のベースブランチを判定
+  local base_branch=""
+  local fetch_target=""
+  for branch in develop main master; do
+    if git rev-parse --verify --quiet "origin/$branch" >/dev/null; then
+      base_branch="origin/$branch"
+      fetch_target="$branch"
+      break
+    fi
+  done
+
+  if [[ -z "$base_branch" ]]; then
+    echo "Error: Remote base branch not found."
+    return 1
+  fi
+
+  # リモートの基準ブランチの最新情報を取得
+  git fetch origin "$fetch_target" --quiet
+
+  # コミット済みの編集ファイル一覧と数
+  local committed_files
+  committed_files=$(git diff --name-only "$base_branch...HEAD")
+  local committed_count=0
+  [[ -n "$committed_files" ]] && committed_count=$(echo "$committed_files" | sed '/^$/d' | wc -l | tr -d ' ')
+
+  # 未コミットの編集ファイル一覧と数
+  local uncommitted_files
+  uncommitted_files=$(git status --porcelain | awk '{print $2}')
+  local uncommitted_count=0
+  [[ -n "$uncommitted_files" ]] && uncommitted_count=$(echo "$uncommitted_files" | sed '/^$/d' | wc -l | tr -d ' ')
+
+  # 自分が編集中以外の、develop側での差分ファイル数
+  local develop_files
+  develop_files=$(git diff --name-only "HEAD...$base_branch")
+
+  # 自分が編集したファイル（コミット済み ＋ 未コミット）をまとめる
+  local my_edited_files
+  my_edited_files=$(echo -e "${committed_files}\n${uncommitted_files}" | sed '/^$/d' | sort -u)
+
+  # develop側のファイルリストから、自分が編集したファイルを除外してカウント
+  local diff_not_editing_count=0
+  if [[ -n "$develop_files" ]]; then
+    if [[ -z "$my_edited_files" ]]; then
+      diff_not_editing_count=$(echo "$develop_files" | sed '/^$/d' | wc -l | tr -d ' ')
+    else
+      # grepを使って自分が編集したファイルを除外
+      diff_not_editing_count=$(echo "$develop_files" | grep -F -x -v -f <(echo "$my_edited_files") | sed '/^$/d' | wc -l | tr -d ' ')
+    fi
+  fi
+
+  # --- 出力 ---
+  echo -e "\n[ Branch: $current_branch / Base: $base_branch ]"
+  echo "--------------------------------------------------"
+  echo "コミット済みの編集ファイル数 : $committed_count"
+  echo "未コミットの編集ファイル数   : $uncommitted_count"
+  echo "developと比較した差分ファイル数 : $diff_not_editing_count"
+  echo "--------------------------------------------------"
+}
+
+# 複数のコミットログを順に修正
+function git-rebase-i() {
+  # 引数がない場合はデフォルトで 3 とする
+  local count="${1:-3}"
+
+  # --- ガイド表示エリア ---
+  echo -e "\n\033[1;33m=== コミットメッセージ修正の手順 ===\033[0m"
+
+  echo -e "\033[1;36m【STEP 1：対象の選択】\033[0m"
+  echo "1. エディタが開くと、コミット一覧が表示される。"
+  echo -e "2. 修正したい行の先頭にある \033[1mpick\033[0m を削除し、"
+  echo -e "   代わりに \033[1;31mreword\033[0m (または \033[1;31mr\033[0m) と入力。"
+  echo "3. ファイルを保存して閉じる。"
+
+  echo -e "\n\033[1;36m【STEP 2：メッセージの修正】\033[0m"
+  echo "4. 直後に再びエディタが開き、対象のコミットメッセージが表示。"
+  echo "5. メッセージを正しい内容に書き換える。"
+  echo "6. 保存して閉じれば完了。"
+  echo "-------------------------------------------------------"
+
+  read -p "手順確認後、Enterを押して開始..."
+
+  # 変数への代入を省略することで、単にEnter入力を待つ
+  if [ -n "$ZSH_VERSION" ]; then
+    read  # Zsh用
+  else
+    read  # Bash用
+  fi
+
+  # コマンド実行
+  git rebase -i HEAD~"$count"
+}
