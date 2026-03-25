@@ -426,15 +426,15 @@ function git-start-oss() {
     return 1
   fi
 
-  # 現在のOSSのリモートURLをチェック
+  # 現在のOSSのリモートURLを「実行前」に取得しておく
   local upstream_url=$(git remote get-url origin 2>/dev/null)
   if [[ -z "$upstream_url" ]]; then
     echo "Error: Not in a git repository or 'origin' not found."
     return 1
   fi
 
-  # 自作関数 'start-git-project' を実行して、新しいPrivateリポジトリを作成 & 移動
-  # これにより、~/src/github.com/ok66ym/<new_repo_name> が作成され、そこに移動する
+  # 自作関数 'start-git-project' を実行
+  # GitHub上にPrivateリポジトリを作成し、ghq管理下の新しいディレクトリに移動する
   start-git-project "$new_repo_name"
   if [ $? -ne 0 ]; then
     echo "Failed to initialize new project directory."
@@ -444,17 +444,73 @@ function git-start-oss() {
   # upstream として登録
   git remote add upstream "$upstream_url"
 
-  # upstream の内容をfetch
-  git fetch upstream
+  # upstream の内容を fetch
+  git fetch upstream --quiet
 
-  # upstream メインブランチ名を自動判別（main か master か）
+  # メインブランチ名を判別（main か master か）
   local main_branch=$(git remote show upstream | grep 'HEAD branch' | cut -d' ' -f5)
   if [[ -z "$main_branch" ]]; then
-      main_branch="main" # 取得失敗時のデフォルト
+      main_branch="main"
   fi
 
-  git merge "upstream/$main_branch" --allow-unrelated-histories --no-edit
+  git pull upstream "$main_branch" --allow-unrelated-histories --no-edit
 
-  # 自分の新しい Private リポジトリ にプッシュ
   git push -u origin "$main_branch"
+}
+
+# OSSリポジトリを自身のPrivateリポジトリとして管理する関数（自動お掃除付き）
+function git-start-oss() {
+  local new_repo_name=$1
+
+  if [[ -z "$new_repo_name" ]]; then
+    echo "Usage: git-start-oss <new-repo-name>"
+    return 1
+  fi
+
+  # 現在のOSSの情報を保存
+  local old_repo_path=$(pwd)
+  local upstream_url=$(git remote get-url origin 2>/dev/null)
+
+  if [[ -z "$upstream_url" ]]; then
+    echo "Error: Not in a git repository or 'origin' not found."
+    return 1
+  fi
+
+  # 新しいディレクトリの作成と移動
+  start-git-project "$new_repo_name"
+  if [ $? -ne 0 ]; then
+    echo "Failed to initialize new project directory."
+    return 1
+  fi
+
+  # リモート設定
+  git remote add upstream "$upstream_url"
+
+  # ブランチ名の取得（通信を伴う remote show ではなく、シンボリック参照で判別）
+  # 取得できない場合は main をデフォルトにする
+  local main_branch=$(git remote show upstream 2>/dev/null | grep 'HEAD branch' | cut -d' ' -f5)
+  if [[ -z "$main_branch" ]]; then
+      main_branch="main"
+  fi
+
+  # upstream の内容を引き込む
+  echo "Pulling from upstream/$main_branch..."
+  if ! git pull upstream "$main_branch" --allow-unrelated-histories --no-edit; then
+    echo "Pull failed! Connection error might have occurred."
+    return 1
+  fi
+
+  # 自分の Private リポジトリにプッシュ
+  if git push -u origin "$main_branch"; then
+    echo "Successfully pushed to your private origin!"
+
+    # 古いリポジトリを削除
+    if [[ "$old_repo_path" != "$(pwd)" ]] && [[ "$old_repo_path" == *"$(ghq root)"* ]]; then
+      rm -rf "$old_repo_path"
+      echo "Old repository deleted: $old_repo_path"
+    fi
+  else
+    echo "Push failed! Keeping the oss repository for safety."
+    return 1
+  fi
 }
