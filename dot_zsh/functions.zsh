@@ -414,3 +414,47 @@ function git-rebase-i() {
   # コマンド実行
   git rebase -i HEAD~"$count"
 }
+
+# OSSリポジトリを自身のPrivateリポジトリとして管理する関数
+function git-start-oss() {
+  local new_repo_name=$1
+
+  # 引数チェック
+  if [[ -z "$new_repo_name" ]]; then
+    echo "move OSS directory under ghq management"
+    echo "Usage: git-start-oss <new-repo-name>"
+    return 1
+  fi
+
+  # 現在のOSSのリモートURLをチェック
+  local upstream_url=$(git remote get-url origin 2>/dev/null)
+  if [[ -z "$upstream_url" ]]; then
+    echo "Error: Not in a git repository or 'origin' not found."
+    return 1
+  fi
+
+  # 自作関数 'start-git-project' を実行して、新しいPrivateリポジトリを作成 & 移動
+  # これにより、~/src/github.com/ok66ym/<new_repo_name> が作成され、そこに移動する
+  start-git-project "$new_repo_name"
+  if [ $? -ne 0 ]; then
+    echo "Failed to initialize new project directory."
+    return 1
+  fi
+
+  # upstream として登録
+  git remote add upstream "$upstream_url"
+
+  # upstream の内容をfetch
+  git fetch upstream
+
+  # upstream メインブランチ名を自動判別（main か master か）
+  local main_branch=$(git remote show upstream | grep 'HEAD branch' | cut -d' ' -f5)
+  if [[ -z "$main_branch" ]]; then
+      main_branch="main" # 取得失敗時のデフォルト
+  fi
+
+  git merge "upstream/$main_branch" --allow-unrelated-histories --no-edit
+
+  # 自分の新しい Private リポジトリ にプッシュ
+  git push -u origin "$main_branch"
+}

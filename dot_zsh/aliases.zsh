@@ -44,6 +44,7 @@ alias reset='git-reset'
 alias commit-i='git-rebase-i'
 alias file='compare-diff-file'
 alias git-start='start-git-project'
+alias oss-start='git-start-oss'
 
 # GitHub CLI
 alias prv="gh pr view"
