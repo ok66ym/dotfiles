@@ -296,6 +296,8 @@ function start-git-project() {
 
   if [ -d "$repo_path" ]; then
     cd "$repo_path"
+    
+    git remote -v
 
     # 状況確認: READMEがない(空の)場合は案内を出す
     if [ ! -f "README.md" ]; then
@@ -315,7 +317,7 @@ iterm2_print_user_vars() {
 
 # 比較元のブランチを自動判定して現在のブランチとの差分ファイル数を計算する関数
 function compare-diff-file() {
-local current_branch
+  local current_branch
   current_branch=$(git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD)
 
   if [[ -z "$current_branch" ]]; then
