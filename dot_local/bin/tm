@@ -1,0 +1,90 @@
+#!/usr/bin/env zsh
+# tm — Claude 状態アイコン付きの tmux セッション/ウィンドウ一覧
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+#
+# Claude Code hooks が /tmp/claude-status/<pane_id> に状態を書き込む前提:
+#   running    → ⚡（ツール実行中）
+#   permission → ❓（permission プロンプト待ち）
+#   waiting    → ✅（応答完了・入力待ち）
+
+# ウィンドウ内の全ペインを確認して最も優先度の高い Claude 状態アイコンを返す
+# pane のフォアグラウンドがシェルの場合は Claude が終了済みとみなしてスキップする
+_claude_icon() {
+  local session="$1"
+  local win_idx="$2"
+  local best=""
+
+  while IFS= read -r line; do
+    local pane_id="${line%% *}"
+    local pane_cmd="${line#* }"
+    [[ -z "$pane_id" ]] && continue
+    # シェルがフォアグラウンド = Claude Code が動いていないのでスキップ
+    case "$pane_cmd" in
+      zsh|bash|sh|fish|dash) continue ;;
+    esac
+    local status_file="/tmp/claude-status/$pane_id"
+    [[ ! -f "$status_file" ]] && continue
+    local pane_status
+    pane_status=$(cat "$status_file" 2>/dev/null)
+    case "$pane_status" in
+      running)
+        best="running"
+        break
+        ;;
+      permission)
+        [[ "$best" != "running" ]] && best="permission"
+        ;;
+      waiting)
+        [[ -z "$best" ]] && best="waiting"
+        ;;
+    esac
+  done < <(tmux list-panes -t "${session}:${win_idx}" -F "#{pane_id} #{pane_current_command}" 2>/dev/null)
+
+  case "$best" in
+    running)    echo " ⚡" ;;
+    permission) echo " ❓" ;;
+    waiting)    echo " ✅" ;;
+    *)          echo "" ;;
+  esac
+}
+
+# セッション×ウィンドウの一覧を構築
+lines=()
+while IFS= read -r raw; do
+  session="${raw%%:*}"
+  rest="${raw#*:}"
+  win_idx="${rest%%:*}"
+  win_name="${rest#*:}"
+
+  icon=$(_claude_icon "$session" "$win_idx")
+  display=$(printf "%-22s  %s:%-30s%s" \
+    "$session" "$win_idx" "$win_name" "$icon")
+  lines+=("${session}:${win_idx}:${display}")
+done < <(tmux list-windows -a \
+  -F "#{session_name}:#{window_index}:#{window_name}" 2>/dev/null)
+
+if [[ ${#lines[@]} -eq 0 ]]; then
+  echo "No tmux sessions found."
+  exit 0
+fi
+
+selection=$(printf "%s\n" "${lines[@]}" \
+  | awk -F: 'BEGIN{OFS=":"} {key=$1":"$2; disp=substr($0, length($1)+length($2)+3); print key"::"disp}' \
+  | fzf --prompt="Session/Window > " \
+        --height=80% --layout=reverse --border \
+        --delimiter='::' --with-nth=2 \
+        --header="Ctrl-C: cancel  |  ⚡ running  ✅ done  ❓ permission" \
+        --ansi)
+
+[[ -z "$selection" ]] && exit 0
+
+key="${selection%%::*}"
+session="${key%%:*}"
+win_idx="${key##*:}"
+
+tmux switch-client -t "${session}:${win_idx}" 2>/dev/null \
+  || tmux select-window -t "${session}:${win_idx}" 2>/dev/null
+
+# worktree セッションへの切替ならサーバーを管理する（バックグラウンドで即時実行）
+zsh ~/.local/bin/tm-wt --server-switch "$session" &>/dev/null &

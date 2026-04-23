@@ -1,0 +1,23 @@
+#!/usr/bin/env zsh
+# tm-kill-session — fzf でセッションを選択して削除
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+
+current=$(tmux display -p '#{session_name}' 2>/dev/null)
+
+session=$(
+  tmux list-sessions -F "#{session_name}" 2>/dev/null \
+    | grep -v "^${current}$" \
+    | fzf --prompt="Kill session > " \
+          --height=80% --layout=reverse --border \
+          --header="Select session to DELETE  (current: ${current})"
+)
+[[ -z "$session" ]] && exit 0
+
+printf "Kill '%s'? (Y/n): " "$session"
+read ans
+[[ -n "$ans" && ! "$ans" =~ ^[yY]$ ]] && echo "Cancelled." && exit 0
+
+tmux kill-session -t "=$session"
+echo "✅ Killed: $session"
+sleep 0.5

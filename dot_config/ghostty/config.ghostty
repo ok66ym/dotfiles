@@ -1,0 +1,112 @@
+# ============================================================
+# Ghostty config — Phase 1 (2026-04-22)
+# - 起動時に tmux に入り、tmux prefix を Ctrl+a にブリッジ
+# - cmd+t は tmux の新規 window（記事準拠）
+# - cmd+shift+t は macOS ネイティブタブを追加
+# - cmd+shift+[ / cmd+shift+] でネイティブタブ移動
+# 読み込み先: Ghostty は ~/.config/ghostty/config を読むため、
+#            ~/.config/ghostty/config はこのファイルへの symlink にしている。
+# ============================================================
+
+# --- 外観 -----------------------------------------------------
+theme = Dracula
+font-family = "BIZ UDGothic Bold"
+# フォントサイズ（pt単位）: ここを変えると即反映、super+r でリロード
+font-size = 12
+adjust-cell-height = 20%
+font-thicken = true
+background = #181a2a
+background-opacity = 0.9
+minimum-contrast = 1.2
+cursor-opacity = 1.0
+
+# --- macOS 固有 ----------------------------------------------
+macos-titlebar-style = tabs
+macos-option-as-alt = true
+
+# --- 起動時の振る舞い ---------------------------------------
+# tmux セッション "main" を確保しつつ起動
+command = /bin/zsh -l -c "exec tmux new-session -A -s main"
+
+# ウィンドウのサイズや位置を次回起動時に復元
+window-save-state = always
+
+# EC2 への SSH で terminfo が無いエラーを防ぐ
+shell-integration-features = ssh-terminfo,ssh-env
+
+# URL を自動検出してリンク化（Cmd+クリックで開く）
+link-url = true
+
+# --- Claude Code / Neovim 向けキー変換 ------------------------
+# Shift+Enter を ESC+CR で送る（Claude Code の改行ショートカット）
+keybind = shift+enter=text:\x1b\r
+
+# Ghostty 設定の再読込
+keybind = super+r=reload_config
+
+# ============================================================
+# tmux prefix ブリッジ
+#   Ghostty 側で cmd+* を押したら tmux prefix (Ctrl+a = \x01) を送り
+#   続けて tmux のキーを送信することで macOS 慣用シーケンスを活かす。
+# ============================================================
+keybind = ctrl+a=text:\x01
+
+# --- tmux window / pane 操作 ---------------------------------
+# 新規 tmux window（記事準拠: cmd+t）
+keybind = super+t=text:\x01c
+# tmux window を閉じる（= tmux kill-window 相当）
+keybind = super+w=text:\x01x
+
+# ペイン分割
+keybind = super+n=text:\x01n
+keybind = super+shift+n=text:\x01v
+
+# ペイン移動（vim 風: shift を足して tmux 側 H/J/K/L を呼ぶ）
+# prefix + h/k は横分割・セッション削除に転用したため大文字で移動
+keybind = super+shift+h=text:\x01H
+keybind = super+shift+j=text:\x01J
+keybind = super+shift+k=text:\x01K
+keybind = super+shift+l=text:\x01L
+
+# コピーモード（tmux copy-mode）
+keybind = super+i=text:\x01i
+
+# URL 一覧表示（Phase 2 で tmux-fzf-url を導入する予定のキー）
+keybind = super+u=text:\x01u
+
+# セッション一覧 / 新規セッション（Phase 2 で実装予定）
+keybind = super+s=text:\x01s
+keybind = super+shift+s=text:\x01S
+
+# tmux ウィンドウ移動（CSI u 拡張: tmux.conf の extended-keys に対応）
+keybind = ctrl+tab=text:\x1b[9;5u
+keybind = ctrl+shift+tab=text:\x1b[9;6u
+
+# ペインスクロール (tmux user-keys 経由)
+keybind = super+up=text:\x1b[1;9A
+keybind = super+down=text:\x1b[1;9B
+keybind = super+k=text:\x1b[107;9~
+keybind = super+j=text:\x1b[106;9~
+
+# ウィンドウ切替 (super+1〜9 で tmux window へジャンプ)
+keybind = super+one=text:\x011
+keybind = super+two=text:\x012
+keybind = super+three=text:\x013
+keybind = super+four=text:\x014
+keybind = super+five=text:\x015
+keybind = super+six=text:\x016
+keybind = super+seven=text:\x017
+keybind = super+eight=text:\x018
+keybind = super+nine=text:\x019
+
+# ============================================================
+# macOS ネイティブタブ（Ghostty 自体のタブ）
+#   cmd+t は tmux に取られているので、Shift 付きで分ける。
+# ============================================================
+keybind = super+shift+t=new_tab
+# ネイティブタブを閉じる（close_surface はタブ内 surface が1つなら
+# そのタブごと閉じる挙動）
+keybind = super+shift+w=close_surface
+# タブ間移動
+keybind = super+shift+bracket_left=previous_tab
+keybind = super+shift+bracket_right=next_tab

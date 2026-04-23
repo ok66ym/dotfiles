@@ -1,0 +1,480 @@
+#!/usr/bin/env zsh
+# tm-wt — git worktree management for tmux (session-per-worktree)
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+#
+# Usage:
+#   tm-wt              fzf でブランチを選択して worktree 作成 or 切替
+#   tm-wt --new        ブランチ名入力して新規 worktree 作成
+#   tm-wt --switch     既存 worktree + ブランチを fzf で選択して切替 or 作成
+#   tm-wt --delete     既存 worktree を fzf で選択して削除
+#   tm-wt --pr BRANCH PR_NUMBER  PR 用 worktree 作成（tm-pr から呼ばれる）
+#
+# worktree ごとに tmux セッションを作成する。
+# セッション名はブランチ名（スラッシュをハイフンに変換）。
+#
+# フロントサーバー管理:
+#   バックエンドポートが1つのため、フロントサーバーは同時に1つだけ起動する。
+#   切替時に現在のサーバーを停止し、切替先のサーバーを起動する。
+#   起動中セッション名を ACTIVE_SERVER_FILE に記録して管理する。
+
+REPOS_FILE="$HOME/.config/tm-wt/repos"
+ACTIVE_SERVER_FILE_CONST="$HOME/.config/tm-wt/active-server"
+PORTS_FILE="$HOME/.config/tm-wt/ports"
+DEFAULT_FRONT_PORT=8888
+
+# セッション名に対応するフロントポートを返す（ports ファイルに記載がなければデフォルト）
+_front_port() {
+  local session="$1"
+  local port
+  port=$(grep -E "^${session}:" "$PORTS_FILE" 2>/dev/null | cut -d: -f2 | head -1)
+  echo "${port:-$DEFAULT_FRONT_PORT}"
+}
+
+# ポートが解放されるまで待つ（最大10秒）
+_wait_port_free() {
+  local port="$1"
+  local i=0
+  while lsof -ti "tcp:$port" >/dev/null 2>&1 && (( i < 20 )); do
+    sleep 0.5
+    (( i++ ))
+  done
+}
+
+# 指定セッション以外の全 worktree セッションのフロントサーバーを停止する
+# active-server ファイルの整合性に依存せず、pane_current_command を直接確認する
+_stop_other_servers() {
+  local target_session="${1:-}"
+  local rf="${REPOS_FILE:-$HOME/.config/tm-wt/repos}"
+  [[ -f "$rf" ]] || return 0
+  while IFS= read -r _repo; do
+    [[ -z "$_repo" ]] && continue
+    local _wt_dir="${_repo%/*}/$(basename "$_repo").worktrees"
+    [[ ! -d "$_wt_dir" ]] && continue
+    for _wt in "$_wt_dir"/*/; do
+      [[ -d "$_wt" ]] || continue
+      local _sname
+      _sname=$(basename "$_wt")
+      [[ -n "$target_session" && "$_sname" == "$target_session" ]] && continue
+      if tmux has-session -t "=$_sname" 2>/dev/null; then
+        local _scmd
+        _scmd=$(tmux display-message -t "${_sname}:1.2" -p "#{pane_current_command}" 2>/dev/null)
+        if [[ "$_scmd" == "node" || "$_scmd" == "npm" ]]; then
+          tmux send-keys -t "${_sname}:1.2" C-c "" 2>/dev/null
+        fi
+      fi
+    done
+  done < "$rf"
+  rm -f "${ACTIVE_SERVER_FILE:-$ACTIVE_SERVER_FILE_CONST}"
+}
+
+# 全 worktree セッションのフロントサーバーを停止してポートを解放する（worktree 作成時用）
+_ensure_port_free() {
+  local port="${1:-$DEFAULT_FRONT_PORT}"
+  _stop_other_servers ""
+  _wait_port_free "$port"
+}
+
+# --server-switch SESSION
+# tmスクリプト等から呼ばれるサーバー管理専用モード。
+# MAIN_REPOを必要とせず、repos ファイルからworktreeを自力で特定して
+# サーバーの停止・起動を行う。git リポジトリ外からも動作する。
+if [[ "${1:-}" == "--server-switch" ]]; then
+  _target="${2:-}"
+  _repos_file="$HOME/.config/tm-wt/repos"
+  _active_file="$HOME/.config/tm-wt/active-server"
+
+  # repos ファイルから該当 worktree ディレクトリを検索する
+  _wtpath=""
+  if [[ -n "$_target" && -f "$_repos_file" ]]; then
+    while IFS= read -r _repo; do
+      [[ -z "$_repo" ]] && continue
+      _candidate="${_repo%/*}/$(basename "$_repo").worktrees/$_target"
+      if [[ -d "$_candidate" ]]; then
+        _wtpath="$_candidate"
+        break
+      fi
+    done < "$_repos_file"
+  fi
+
+  # worktree セッションでなければ何もしない（main, EC2 等は対象外）
+  [[ -z "$_wtpath" ]] && exit 0
+
+  # 移動先以外のサーバーを停止する（移動先のサーバーは維持）
+  _stop_other_servers "$_target"
+
+  # 移動先のサーバー状態を確認して起動する
+  _dest_cmd=$(tmux display-message -t "${_target}:1.2" -p "#{pane_current_command}" 2>/dev/null)
+  if [[ "$_dest_cmd" == "node" || "$_dest_cmd" == "npm" ]]; then
+    # 既に起動中 → ファイルだけ同期
+    mkdir -p "$(dirname "$_active_file")"
+    echo "$_target" > "$_active_file"
+  elif tmux has-session -t "=$_target" 2>/dev/null; then
+    # 未起動 → ポートが解放されるのを待ってから起動する
+    _target_port=$(_front_port "$_target")
+    _wait_port_free "$_target_port"
+    if [[ ! -d "$_wtpath/node_modules" ]]; then
+      _cmd="npm i && npm run watch"
+    else
+      _cmd="npm run watch"
+    fi
+    tmux send-keys -t "${_target}:1.2" "$_cmd" Enter 2>/dev/null
+    mkdir -p "$(dirname "$_active_file")"
+    echo "$_target" > "$_active_file"
+  fi
+
+  exit 0
+fi
+
+if [[ -n "${TM_WT_REPO:-}" ]]; then
+  MAIN_REPO="$TM_WT_REPO"
+else
+  # git worktree list の先頭エントリが常にメインリポジトリ。
+  # git rev-parse --show-toplevel はworktree内ではworktreeのルートを返すため使わない。
+  MAIN_REPO=$(git worktree list --porcelain 2>/dev/null | awk 'NR==1{print $2; exit}')
+  if [[ -z "$MAIN_REPO" ]]; then
+    # git リポジトリ外: --new/--pr は作成のためリポジトリ内が必要
+    # --delete/--switch/デフォルトは保存済みリポジトリ一覧から選択可能
+    if [[ "${1:-}" == "--new" || "${1:-}" == "--pr" ]]; then
+      echo "Error: Not in a git repository."
+      echo "       cd into a git repo first, or set TM_WT_REPO."
+      sleep 2
+      exit 1
+    fi
+    if [[ -f "$REPOS_FILE" && -s "$REPOS_FILE" ]]; then
+      MAIN_REPO=$(sort -u "$REPOS_FILE" | \
+        fzf --prompt="Repository > " \
+            --height=60% --layout=reverse --border \
+            --header="Select repository (not in a git repo)")
+      [[ -z "$MAIN_REPO" ]] && exit 0
+    else
+      echo "Error: Not in a git repository and no known repositories found."
+      echo "       Run tm-wt from within a git repo first to register it."
+      sleep 2
+      exit 1
+    fi
+  fi
+fi
+WORKTREES_DIR="${TM_WT_WORKTREES:-${MAIN_REPO%/*}/$(basename "$MAIN_REPO").worktrees}"
+ACTIVE_SERVER_FILE="$HOME/.config/tm-wt/active-server"
+
+# このリポジトリを git 外からの操作のために記録する
+mkdir -p "$(dirname "$REPOS_FILE")"
+grep -qxF "$MAIN_REPO" "$REPOS_FILE" 2>/dev/null || echo "$MAIN_REPO" >> "$REPOS_FILE"
+
+# ------------------------------------------------------------------ helpers --
+
+_wtdir() { echo "$WORKTREES_DIR/${1//\//-}"; }
+
+# ブランチ名をセッション名として使える形に変換（スラッシュ → ハイフン）
+_session_name() { echo "${1//\//-}"; }
+
+_branch_dir() {
+  local branch="$1"
+  git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null \
+    | awk -v target="refs/heads/$branch" '
+        /^worktree / { cur = $2 }
+        /^branch /  && $2 == target { print cur; exit }
+      '
+}
+
+_list_worktrees() {
+  local wt_dir="$WORKTREES_DIR"
+  git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null \
+    | awk -v wt_dir="$wt_dir" '
+        /^worktree / { cur_path = $2; in_wt = (index($2, wt_dir) == 1 && $2 != wt_dir) }
+        /^branch /  && in_wt {
+          branch = $2
+          sub("^refs/heads/", "", branch)
+          print branch
+        }
+      '
+}
+
+# 現在起動中のフロントサーバーを停止する
+_stop_active_server() {
+  [[ ! -f "$ACTIVE_SERVER_FILE" ]] && return 0
+  local session
+  session=$(cat "$ACTIVE_SERVER_FILE" 2>/dev/null)
+  [[ -z "$session" ]] && return 0
+  if tmux has-session -t "=$session" 2>/dev/null; then
+    local port
+    port=$(_front_port "$session")
+    tmux send-keys -t "${session}:1.2" C-c "" 2>/dev/null
+    _wait_port_free "$port"
+  fi
+  rm -f "$ACTIVE_SERVER_FILE"
+}
+
+# 指定セッションのフロントサーバーを起動する
+# node_modules が存在しない場合は npm i を先に実行する
+_start_server() {
+  local session_name="$1"
+  local wtdir="${2:-$(_wtdir "$session_name")}"
+  tmux has-session -t "=$session_name" 2>/dev/null || return 0
+  local port
+  port=$(_front_port "$session_name")
+  _stop_other_servers "$session_name"
+  _wait_port_free "$port"
+  local cmd
+  if [[ ! -d "$wtdir/node_modules" ]]; then
+    cmd="npm i && npm run watch"
+  else
+    cmd="npm run watch"
+  fi
+  tmux send-keys -t "${session_name}:1.2" "$cmd" Enter 2>/dev/null
+  mkdir -p "$(dirname "$ACTIVE_SERVER_FILE")"
+  echo "$session_name" > "$ACTIVE_SERVER_FILE"
+}
+
+_switch_session() {
+  local name="$1"
+  local wtdir="${2:-$(_wtdir "$name")}"
+
+  # 切替先が WORKTREES_DIR 配下の worktree セッションかどうかを判定
+  local to_worktree=0
+  [[ "$wtdir" == "$WORKTREES_DIR/"* ]] && to_worktree=1
+
+  if (( to_worktree )); then
+    # 移動先以外のサーバーを停止してからポートが解放されるのを待つ
+    local _port
+    _port=$(_front_port "$name")
+    _stop_other_servers "$name"
+    _wait_port_free "$_port"
+  fi
+
+  if tmux has-session -t "=$name" 2>/dev/null; then
+    tmux switch-client -t "=$name"
+  else
+    tmux new-session -d -s "$name" -c "$wtdir"
+    tmux switch-client -t "=$name"
+  fi
+
+  if (( to_worktree )); then
+    # pane 1.2 の実際のコマンドでサーバー起動状態を判定（ファイルの状態に依存しない）
+    local pane_cmd
+    pane_cmd=$(tmux display-message -t "${name}:1.2" -p "#{pane_current_command}" 2>/dev/null)
+    if [[ "$pane_cmd" == "node" || "$pane_cmd" == "npm" ]]; then
+      # 既にサーバー起動中 → active-server ファイルだけ同期する
+      mkdir -p "$(dirname "$ACTIVE_SERVER_FILE")"
+      echo "$name" > "$ACTIVE_SERVER_FILE"
+    else
+      # サーバー未起動 → 起動する
+      _start_server "$name" "$wtdir"
+    fi
+  fi
+}
+
+# ---------------------------------------------------------------- create ----
+
+_create_worktree() {
+  local branch="$1"
+  local session_name="${2:-$(_session_name "$branch")}"
+  local wtdir
+  wtdir=$(_wtdir "$branch")
+
+  # 既存 worktree なら対応セッションに切替
+  if [[ -d "$wtdir/.git" ]] || git -C "$MAIN_REPO" worktree list 2>/dev/null | grep -q "$wtdir"; then
+    echo "Worktree already exists: $wtdir"
+    _switch_session "$session_name" "$wtdir"
+    return 0
+  fi
+
+  mkdir -p "$WORKTREES_DIR"
+
+  local branch_exists_local branch_exists_remote
+  git -C "$MAIN_REPO" rev-parse --verify "$branch" &>/dev/null && branch_exists_local=1
+  git -C "$MAIN_REPO" rev-parse --verify "origin/$branch" &>/dev/null && branch_exists_remote=1
+
+  echo "Creating worktree: $wtdir"
+  if (( ${branch_exists_local:-0} )); then
+    if [[ "$branch" == "develop" ]]; then
+      echo "Fetching latest develop from origin..."
+      git -C "$MAIN_REPO" fetch origin develop --quiet 2>/dev/null || true
+      git -C "$MAIN_REPO" branch -f develop origin/develop 2>/dev/null || true
+    fi
+    git -C "$MAIN_REPO" worktree add "$wtdir" "$branch"
+  elif (( ${branch_exists_remote:-0} )); then
+    git -C "$MAIN_REPO" worktree add -b "$branch" "$wtdir" "origin/$branch"
+  else
+    git -C "$MAIN_REPO" fetch origin develop --quiet 2>/dev/null || true
+    git -C "$MAIN_REPO" worktree add -b "$branch" "$wtdir" "origin/develop"
+  fi
+
+  if [[ $? -ne 0 ]]; then
+    echo "Error: git worktree add failed."
+    sleep 2
+    return 1
+  fi
+
+  # 現在起動中のサーバーを停止してから新セッションへ
+  _ensure_port_free "$DEFAULT_FRONT_PORT"
+
+  # 新規セッションを作成（worktree root）
+  tmux new-session -d -s "$session_name" -c "$wtdir"
+
+  # Window 1: 左右等分割
+  #   pane 1 (左): worktree root — 汎用ターミナル
+  #   pane 2 (右): worktree root — npm ci → npm run watch 自動起動
+  if [[ -d "$wtdir/front" ]]; then
+    tmux split-window -t "${session_name}:1.1" -h -c "$wtdir"
+    tmux send-keys -t "${session_name}:1.2" \
+      "npm i && echo '' && echo '✅ npm i done. Starting server...' && npm run watch" \
+      Enter
+    mkdir -p "$(dirname "$ACTIVE_SERVER_FILE")"
+    echo "$session_name" > "$ACTIVE_SERVER_FILE"
+  fi
+
+  # Window 2: misc（その他操作用）
+  tmux new-window -d -n "misc" -c "$wtdir" -t "${session_name}"
+
+  tmux select-pane -t "${session_name}:1.1"
+  tmux select-window -t "${session_name}:1"
+  tmux switch-client -t "=$session_name"
+
+  echo ""
+  echo "✅ Worktree created: $branch"
+  echo "   Session: $session_name"
+  echo "   Path:    $wtdir"
+  sleep 1
+}
+
+# ------------------------------------------------------------------- modes --
+
+_mode_new() {
+  echo "=== New Worktree: $(basename "$MAIN_REPO") ==="
+  echo "    Root: $MAIN_REPO"
+  echo "    Dest: $WORKTREES_DIR"
+  echo ""
+  printf "Branch name (new or existing, Ctrl-C to cancel): "
+  local branch=""
+  local -i _cancelled=0
+  trap '_cancelled=1' INT
+  IFS= read -r branch
+  trap - INT
+  (( _cancelled )) && echo "" && echo "Cancelled." && return 0
+  [[ -z "$branch" ]] && echo "Cancelled." && return 0
+  _create_worktree "$branch"
+}
+
+_mode_select() {
+  local branch
+  branch=$(
+    {
+      git -C "$MAIN_REPO" branch --format='%(refname:short)' 2>/dev/null
+      git -C "$MAIN_REPO" branch -r --format='%(refname:short)' 2>/dev/null \
+        | sed 's|^origin/||' | grep -v '^HEAD'
+    } | sort -u \
+      | fzf --prompt="Branch > " \
+            --height=80% --layout=reverse --border \
+            --header="$(basename "$MAIN_REPO") — select to open worktree"
+  )
+  [[ -z "$branch" ]] && return 0
+
+  local wtdir
+  wtdir=$(_wtdir "$branch")
+  if [[ -d "$wtdir" ]] || git -C "$MAIN_REPO" worktree list 2>/dev/null | grep -q "$wtdir"; then
+    _switch_session "$(_session_name "$branch")" "$wtdir"
+  else
+    _create_worktree "$branch"
+  fi
+}
+
+_mode_switch() {
+  local worktrees
+  worktrees=($(_list_worktrees))
+  local branch
+  branch=$(
+    {
+      printf "%s\n" "${worktrees[@]}" | sed 's/^/[wt] /'
+      git -C "$MAIN_REPO" branch --format='%(refname:short)' 2>/dev/null \
+        | grep -vxF "${worktrees[@]}" 2>/dev/null || true
+    } \
+      | fzf --prompt="Branch > " \
+            --height=80% --layout=reverse --border \
+            --header="$(basename "$MAIN_REPO") — [wt]: session exists / others: create new"
+  )
+  [[ -z "$branch" ]] && return 0
+  branch="${branch#\[wt\] }"
+
+  local wtdir
+  wtdir=$(_wtdir "$branch")
+  if [[ -d "$wtdir" ]] || git -C "$MAIN_REPO" worktree list 2>/dev/null | grep -q "$wtdir"; then
+    _switch_session "$(_session_name "$branch")" "$wtdir"
+  else
+    _create_worktree "$branch"
+  fi
+}
+
+_mode_delete() {
+  local branch
+  branch=$(
+    _list_worktrees \
+      | fzf --prompt="Delete worktree > " \
+            --height=80% --layout=reverse --border \
+            --header="$(basename "$MAIN_REPO") — select worktree to DELETE"
+  )
+  [[ -z "$branch" ]] && return 0
+
+  local session_name
+  session_name=$(_session_name "$branch")
+  local wtdir
+  wtdir=$(_branch_dir "$branch")
+  [[ -z "$wtdir" ]] && wtdir=$(_wtdir "$branch")
+
+  printf "Delete '%s'? (Y/n): " "$branch"
+  local ans=""
+  local -i _cancelled=0
+  trap '_cancelled=1' INT
+  IFS= read -r ans
+  trap - INT
+  (( _cancelled )) && echo "" && echo "Cancelled." && return 0
+  [[ -n "$ans" && ! "$ans" =~ ^[yY]$ ]] && echo "Cancelled." && return 0
+
+  # 削除対象がアクティブサーバーならファイルを消す
+  local active
+  active=$(cat "$ACTIVE_SERVER_FILE" 2>/dev/null)
+  [[ "$active" == "$session_name" ]] && rm -f "$ACTIVE_SERVER_FILE"
+
+  # セッションごと削除（window も含む）
+  tmux kill-session -t "=$session_name" 2>/dev/null
+
+  git -C "$MAIN_REPO" worktree remove --force "$wtdir" 2>/dev/null || rm -rf "$wtdir"
+  git -C "$MAIN_REPO" worktree prune 2>/dev/null
+
+  if git -C "$MAIN_REPO" rev-parse --verify "$branch" &>/dev/null; then
+    printf "Delete local branch '%s' too? (Y/n): " "$branch"
+    local del_branch=""
+    local -i _del_cancelled=0
+    trap '_del_cancelled=1' INT
+    IFS= read -r del_branch
+    trap - INT
+    (( _del_cancelled )) && echo "" && return 0
+    [[ -z "$del_branch" || "$del_branch" =~ ^[yY]$ ]] && git -C "$MAIN_REPO" branch -D "$branch"
+  fi
+
+  echo ""
+  echo "✅ Deleted: $branch"
+  sleep 1
+}
+
+_mode_pr() {
+  local branch="$1"
+  local pr_number="$2"
+  # セッション名はブランチ名ベースに統一（_mode_delete/_mode_switch と一致させる）
+  # Window 1 の名前だけ PR#N に変更してPR番号を識別できるようにする
+  _create_worktree "$branch"
+  local session_name
+  session_name=$(_session_name "$branch")
+  tmux rename-window -t "${session_name}:1" "PR#${pr_number}" 2>/dev/null
+}
+
+# -------------------------------------------------------------------- main --
+
+case "${1:-}" in
+  --new)    _mode_new ;;
+  --switch) _mode_switch ;;
+  --delete) _mode_delete ;;
+  --pr)     _mode_pr "${2:?branch required}" "${3:?pr-number required}" ;;
+  *)        _mode_select ;;
+esac

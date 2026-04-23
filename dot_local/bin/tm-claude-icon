@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# tm-claude-icon SESSION WINDOW_INDEX
+# tmux window-status-format から呼ばれる Claude Code 状態アイコン表示スクリプト。
+# 指定ウィンドウ内の現存する pane の /tmp/claude-status/<pane_id> を読み、
+# 最も優先度が高い状態のアイコンを返す。
+#   running    → ⚡（ツール実行中）
+#   permission → ❓（permission プロンプト待ち）
+#   waiting    → ✅（応答完了・入力待ち）
+#   (なし)     → 空文字（Claude Code が動いていない）
+#
+# pane のフォアグラウンドプロセスがシェル（zsh/bash/sh/fish）の場合は
+# Claude が終了したとみなしてスキップする（ゴーストステータスを防ぐ）。
+
+SESSION="$1"
+WIN_IDX="$2"
+
+[[ -z "$SESSION" || -z "$WIN_IDX" ]] && exit 0
+[[ ! -d /tmp/claude-status ]] && exit 0
+
+best=""
+while IFS= read -r line; do
+  pane_id="${line%% *}"
+  pane_cmd="${line#* }"
+  [[ -z "$pane_id" ]] && continue
+
+  # シェルがフォアグラウンド = Claude Code が動いていないのでスキップ
+  case "$pane_cmd" in
+    zsh|bash|sh|fish|dash) continue ;;
+  esac
+
+  status_file="/tmp/claude-status/$pane_id"
+  [[ ! -f "$status_file" ]] && continue
+
+  pane_status=$(cat "$status_file" 2>/dev/null)
+  case "$pane_status" in
+    running)
+      best="running"
+      break
+      ;;
+    permission)
+      [[ "$best" != "running" ]] && best="permission"
+      ;;
+    waiting)
+      [[ -z "$best" ]] && best="waiting"
+      ;;
+  esac
+done < <(tmux list-panes -t "${SESSION}:${WIN_IDX}" -F "#{pane_id} #{pane_current_command}" 2>/dev/null)
+
+case "$best" in
+  running)    printf " ⚡" ;;
+  permission) printf " ❓" ;;
+  waiting)    printf " ✅" ;;
+  *)          printf "" ;;
+esac

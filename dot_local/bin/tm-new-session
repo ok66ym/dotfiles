@@ -1,0 +1,22 @@
+#!/usr/bin/env zsh
+# tm-new-session — 任意のディレクトリで新規 tmux セッションを作成して切替
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+
+cwd="$PWD"
+echo "=== New Session ==="
+echo "    Directory: $cwd"
+echo ""
+printf "Session name: "
+read session_name
+[[ -z "$session_name" ]] && echo "Cancelled." && exit 0
+
+if tmux has-session -t "=$session_name" 2>/dev/null; then
+  echo "Session '$session_name' already exists. Switching..."
+  tmux switch-client -t "=$session_name"
+else
+  tmux new-session -d -s "$session_name" -c "$cwd"
+  tmux switch-client -t "=$session_name"
+  echo "✅ Created: $session_name  ($cwd)"
+fi
+sleep 0.5

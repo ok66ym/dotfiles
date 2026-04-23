@@ -1,0 +1,67 @@
+#!/usr/bin/env zsh
+# tm-pr — PR URL/番号 から worktree を作成して tmux window を開く
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+#
+# Usage (tmux display-popup 経由):
+#   tm-pr
+#
+# 環境変数:
+#   TM_WT_REPO  メインクローンのパス（tm-wt と共通）
+
+if [[ -n "${TM_WT_REPO:-}" ]]; then
+  MAIN_REPO="$TM_WT_REPO"
+else
+  # git worktree list の先頭エントリが常にメインリポジトリ。
+  # git rev-parse --show-toplevel はworktree内ではworktreeのルートを返すため使わない。
+  MAIN_REPO=$(git worktree list --porcelain 2>/dev/null | awk 'NR==1{print $2; exit}')
+  if [[ -z "$MAIN_REPO" ]]; then
+    echo "Error: Not in a git repository."
+    echo "       Run from within a git repo or set TM_WT_REPO."
+    sleep 2
+    exit 1
+  fi
+fi
+TM_WT="$HOME/.local/bin/tm-wt"
+
+echo "=== PR Worktree: $(basename "$MAIN_REPO") ==="
+echo ""
+printf "PR URL or number: "
+read pr_input
+[[ -z "$pr_input" ]] && echo "Cancelled." && exit 0
+
+echo "Fetching PR info..."
+
+# gh pr view でまとめて取得（テンプレートで 1 行出力）
+pr_line=$(cd "$MAIN_REPO" && \
+  gh pr view "$pr_input" \
+    --json number,headRefName,title \
+    --template '{{.number}}|{{.headRefName}}|{{.title}}' 2>/dev/null)
+
+if [[ -z "$pr_line" ]]; then
+  echo "Error: PR not found: $pr_input"
+  echo "Tip: try the full URL (https://github.com/C-FO/CFO-Alpha/pull/NNN)"
+  exit 1
+fi
+
+pr_number="${pr_line%%|*}"
+pr_rest="${pr_line#*|}"
+pr_branch="${pr_rest%%|*}"
+pr_title="${pr_rest#*|}"
+
+if [[ -z "$pr_branch" || -z "$pr_number" ]]; then
+  echo "Error: Could not parse PR metadata."
+  exit 1
+fi
+
+echo ""
+echo "PR #${pr_number}: ${pr_title}"
+echo "Branch: ${pr_branch}"
+echo ""
+
+# origin から最新を取得
+echo "Fetching origin/${pr_branch}..."
+git -C "$MAIN_REPO" fetch origin "$pr_branch" --quiet 2>/dev/null || true
+
+# tm-wt --pr モードで worktree 作成（window 名を "PR#N" にする）
+TM_WT_REPO="$MAIN_REPO" zsh "$TM_WT" --pr "$pr_branch" "$pr_number"

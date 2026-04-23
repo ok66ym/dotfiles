@@ -1,0 +1,32 @@
+#!/usr/bin/env zsh
+# tmux の現在ウィンドウの全ペインのスクロールバックから URL を収集し
+# fzf で選択して open で開く
+
+urls=""
+
+for pid in $(tmux list-panes -F "#{pane_id}"); do
+  osc8=$(tmux capture-pane -J -p -e -t "$pid" -S -10000 \
+    | perl -ne 'while (/\x1b\]8;[^;]*;([^\x1b]+)\x1b\\/g) { print "$1\n" if $1 ne "" }' \
+    | grep -E '^https?://')
+  plain=$(tmux capture-pane -J -p -t "$pid" -S -10000 \
+    | grep -oE '(https?|ftp)://[^[:space:]"<>]+' \
+    | sed 's/[.,;:!?)]+$//')
+  urls="$urls\n$osc8\n$plain"
+done
+
+urls=$(printf '%b' "$urls" | grep -v '^$' | sort -u)
+
+if [[ -z "$urls" ]]; then
+  echo "No URLs found in scrollback"
+  sleep 1
+  exit 0
+fi
+
+selected=$(printf '%s\n' "${(f)urls}" | fzf \
+  --height 100% \
+  --reverse \
+  --prompt="URL > " \
+  --preview="echo {}" \
+  --preview-window=down:1:wrap)
+
+[[ -n "$selected" ]] && open "$selected"
