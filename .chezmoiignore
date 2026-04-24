@@ -36,3 +36,8 @@ tmp
 # --- privateで管理するので念のため除外 ---
 .config/gh/config.yml
 .config/raycast
+
+# --- tm-wt: 実行時生成の状態ファイルは管理外 --- 
+# hooks/ と ports は chezmoi add で個別に管理する 
+.config/tm-wt/repos
+.config/tm-wt/active-server
