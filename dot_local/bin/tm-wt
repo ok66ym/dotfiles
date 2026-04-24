@@ -51,7 +51,7 @@ _stop_other_servers() {
     [[ -z "$_repo" ]] && continue
     local _wt_dir="${_repo%/*}/$(basename "$_repo").worktrees"
     [[ ! -d "$_wt_dir" ]] && continue
-    for _wt in "$_wt_dir"/*/; do
+    for _wt in "$_wt_dir"/*/(N); do
       [[ -d "$_wt" ]] || continue
       local _sname
       _sname=$(basename "$_wt")
@@ -169,6 +169,36 @@ _wtdir() { echo "$WORKTREES_DIR/${1//\//-}"; }
 # ブランチ名をセッション名として使える形に変換（スラッシュ → ハイフン）
 _session_name() { echo "${1//\//-}"; }
 
+# リポジトリ固有フックを実行する（ファイルが存在する場合のみ）
+# 引数: hook_name  session_name  wtdir
+_run_hook() {
+  local hook_name="$1"
+  local session_name="$2"
+  local wtdir="$3"
+  local hook_file="$HOME/.config/tm-wt/hooks/$(basename "$MAIN_REPO")/${hook_name}.zsh"
+  [[ -f "$hook_file" ]] && zsh "$hook_file" "$session_name" "$wtdir"
+}
+
+# リポジトリのデフォルトブランチを返す（origin/HEAD → main/master/develop の順でフォールバック）
+_default_branch() {
+  local branch
+  branch=$(git -C "$MAIN_REPO" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null \
+    | sed 's|refs/remotes/origin/||')
+  [[ -n "$branch" ]] && echo "$branch" && return
+  for candidate in main master develop; do
+    if git -C "$MAIN_REPO" rev-parse --verify "origin/$candidate" &>/dev/null; then
+      echo "$candidate"
+      return
+    fi
+  done
+  echo "main"
+}
+
+# main tmux セッションが存在しなければ $HOME で作成する
+_ensure_main_session() {
+  tmux has-session -t "=main" 2>/dev/null || tmux new-session -d -s "main" -c "$HOME"
+}
+
 _branch_dir() {
   local branch="$1"
   git -C "$MAIN_REPO" worktree list --porcelain 2>/dev/null \
@@ -247,21 +277,17 @@ _switch_session() {
     tmux switch-client -t "=$name"
   else
     tmux new-session -d -s "$name" -c "$wtdir"
+    if (( to_worktree )); then
+      tmux new-window -d -n "misc" -c "$wtdir" -t "${name}"
+      tmux select-pane -t "${name}:1.1"
+      tmux select-window -t "${name}:1"
+    fi
     tmux switch-client -t "=$name"
   fi
 
   if (( to_worktree )); then
-    # pane 1.2 の実際のコマンドでサーバー起動状態を判定（ファイルの状態に依存しない）
-    local pane_cmd
-    pane_cmd=$(tmux display-message -t "${name}:1.2" -p "#{pane_current_command}" 2>/dev/null)
-    if [[ "$pane_cmd" == "node" || "$pane_cmd" == "npm" ]]; then
-      # 既にサーバー起動中 → active-server ファイルだけ同期する
-      mkdir -p "$(dirname "$ACTIVE_SERVER_FILE")"
-      echo "$name" > "$ACTIVE_SERVER_FILE"
-    else
-      # サーバー未起動 → 起動する
-      _start_server "$name" "$wtdir"
-    fi
+    # リポジトリ固有の接続フック（pane 確認・サーバー起動など）
+    _run_hook "on-attach" "$name" "$wtdir"
   fi
 }
 
@@ -286,19 +312,25 @@ _create_worktree() {
   git -C "$MAIN_REPO" rev-parse --verify "$branch" &>/dev/null && branch_exists_local=1
   git -C "$MAIN_REPO" rev-parse --verify "origin/$branch" &>/dev/null && branch_exists_remote=1
 
+  local default_branch
+  default_branch=$(_default_branch)
+
   echo "Creating worktree: $wtdir"
   if (( ${branch_exists_local:-0} )); then
-    if [[ "$branch" == "develop" ]]; then
-      echo "Fetching latest develop from origin..."
-      git -C "$MAIN_REPO" fetch origin develop --quiet 2>/dev/null || true
-      git -C "$MAIN_REPO" branch -f develop origin/develop 2>/dev/null || true
+    if [[ "$branch" == "$default_branch" ]]; then
+      echo "Fetching latest ${default_branch} from origin..."
+      git -C "$MAIN_REPO" fetch origin "$default_branch" --quiet 2>/dev/null || true
+      git -C "$MAIN_REPO" branch -f "$default_branch" "origin/$default_branch" 2>/dev/null || true
     fi
     git -C "$MAIN_REPO" worktree add "$wtdir" "$branch"
   elif (( ${branch_exists_remote:-0} )); then
+    echo "Fetching origin/${branch}..."
+    git -C "$MAIN_REPO" fetch origin "$branch" --quiet 2>/dev/null || true
     git -C "$MAIN_REPO" worktree add -b "$branch" "$wtdir" "origin/$branch"
   else
-    git -C "$MAIN_REPO" fetch origin develop --quiet 2>/dev/null || true
-    git -C "$MAIN_REPO" worktree add -b "$branch" "$wtdir" "origin/develop"
+    echo "Fetching latest ${default_branch} from origin..."
+    git -C "$MAIN_REPO" fetch origin "$default_branch" --quiet 2>/dev/null || true
+    git -C "$MAIN_REPO" worktree add -b "$branch" "$wtdir" "origin/$default_branch"
   fi
 
   if [[ $? -ne 0 ]]; then
@@ -313,17 +345,8 @@ _create_worktree() {
   # 新規セッションを作成（worktree root）
   tmux new-session -d -s "$session_name" -c "$wtdir"
 
-  # Window 1: 左右等分割
-  #   pane 1 (左): worktree root — 汎用ターミナル
-  #   pane 2 (右): worktree root — npm ci → npm run watch 自動起動
-  if [[ -d "$wtdir/front" ]]; then
-    tmux split-window -t "${session_name}:1.1" -h -c "$wtdir"
-    tmux send-keys -t "${session_name}:1.2" \
-      "npm i && echo '' && echo '✅ npm i done. Starting server...' && npm run watch" \
-      Enter
-    mkdir -p "$(dirname "$ACTIVE_SERVER_FILE")"
-    echo "$session_name" > "$ACTIVE_SERVER_FILE"
-  fi
+  # リポジトリ固有の初期化フック（pane 分割・サーバー起動など）
+  _run_hook "on-create" "$session_name" "$wtdir"
 
   # Window 2: misc（その他操作用）
   tmux new-window -d -n "misc" -c "$wtdir" -t "${session_name}"
@@ -346,14 +369,19 @@ _mode_new() {
   echo "    Root: $MAIN_REPO"
   echo "    Dest: $WORKTREES_DIR"
   echo ""
-  printf "Branch name (new or existing, Ctrl-C to cancel): "
+  printf "Branch name (new or existing, Ctrl-C/Esc to cancel): "
   local branch=""
   local -i _cancelled=0
   trap '_cancelled=1' INT
-  IFS= read -r branch
+  IFS= read -r branch || _cancelled=1   # Ctrl+C でシェルが終了する前にフォールバック
   trap - INT
-  (( _cancelled )) && echo "" && echo "Cancelled." && return 0
-  [[ -z "$branch" ]] && echo "Cancelled." && return 0
+  # Esc（\e で始まる入力）もキャンセルとして扱う
+  [[ "$branch" == $'\e'* ]] && _cancelled=1
+  if (( _cancelled )) || [[ -z "$branch" ]]; then
+    echo ""
+    echo "Cancelled."
+    return 0
+  fi
   _create_worktree "$branch"
 }
 
@@ -431,31 +459,54 @@ _mode_delete() {
   (( _cancelled )) && echo "" && echo "Cancelled." && return 0
   [[ -n "$ans" && ! "$ans" =~ ^[yY]$ ]] && echo "Cancelled." && return 0
 
+  # ローカルブランチ削除の確認をセッション削除より先に行う（全対話を終えてから破壊的処理へ）
+  local del_branch="n"
+  if git -C "$MAIN_REPO" rev-parse --verify "$branch" &>/dev/null; then
+    printf "Delete local branch '%s' too? (Y/n): " "$branch"
+    local -i _del_cancelled=0
+    trap '_del_cancelled=1' INT
+    IFS= read -r del_branch
+    trap - INT
+    (( _del_cancelled )) && del_branch="n"
+  fi
+
   # 削除対象がアクティブサーバーならファイルを消す
   local active
   active=$(cat "$ACTIVE_SERVER_FILE" 2>/dev/null)
   [[ "$active" == "$session_name" ]] && rm -f "$ACTIVE_SERVER_FILE"
 
-  # セッションごと削除（window も含む）
-  tmux kill-session -t "=$session_name" 2>/dev/null
+  # 現在のセッションが削除対象かどうかを確認
+  local current_session
+  current_session=$(tmux display -p '#{session_name}' 2>/dev/null)
+  local is_current=0
+  [[ "$current_session" == "$session_name" ]] && is_current=1
 
+  # worktree 削除
   git -C "$MAIN_REPO" worktree remove --force "$wtdir" 2>/dev/null || rm -rf "$wtdir"
   git -C "$MAIN_REPO" worktree prune 2>/dev/null
 
-  if git -C "$MAIN_REPO" rev-parse --verify "$branch" &>/dev/null; then
-    printf "Delete local branch '%s' too? (Y/n): " "$branch"
-    local del_branch=""
-    local -i _del_cancelled=0
-    trap '_del_cancelled=1' INT
-    IFS= read -r del_branch
-    trap - INT
-    (( _del_cancelled )) && echo "" && return 0
-    [[ -z "$del_branch" || "$del_branch" =~ ^[yY]$ ]] && git -C "$MAIN_REPO" branch -D "$branch"
+  # .code-workspace ファイルを削除
+  local ws_file="${WORKTREES_DIR}/${session_name}.code-workspace"
+  [[ -f "$ws_file" ]] && rm -f "$ws_file"
+
+  # ローカルブランチ削除
+  if [[ -z "$del_branch" || "$del_branch" =~ ^[yY]$ ]]; then
+    git -C "$MAIN_REPO" branch -D "$branch" 2>/dev/null || true
   fi
 
   echo ""
   echo "✅ Deleted: $branch"
-  sleep 1
+
+  if (( is_current )); then
+    # 現在のセッションを削除する場合: main を確保し、ポップアップ終了後にセッション削除
+    _ensure_main_session
+    local sn="$session_name"
+    tmux run-shell -d 1 "tmux switch-client -t '=main' 2>/dev/null; tmux kill-session -t '=${sn}' 2>/dev/null"
+    exit 0
+  else
+    tmux kill-session -t "=$session_name" 2>/dev/null
+    sleep 1
+  fi
 }
 
 _mode_pr() {

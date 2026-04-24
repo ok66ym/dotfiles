@@ -36,11 +36,12 @@ echo "Fetching PR info..."
 pr_line=$(cd "$MAIN_REPO" && \
   gh pr view "$pr_input" \
     --json number,headRefName,title \
-    --template '{{.number}}|{{.headRefName}}|{{.title}}' 2>/dev/null)
+    --template '{{.number}}|{{.headRefName}}|{{.title}}')
 
 if [[ -z "$pr_line" ]]; then
   echo "Error: PR not found: $pr_input"
   echo "Tip: try the full URL (https://github.com/C-FO/CFO-Alpha/pull/NNN)"
+  read -r "?Press Enter to close..."
   exit 1
 fi
 
@@ -51,6 +52,7 @@ pr_title="${pr_rest#*|}"
 
 if [[ -z "$pr_branch" || -z "$pr_number" ]]; then
   echo "Error: Could not parse PR metadata."
+  read -r "?Press Enter to close..."
   exit 1
 fi
 

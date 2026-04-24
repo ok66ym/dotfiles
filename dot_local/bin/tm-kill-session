@@ -1,23 +1,59 @@
 #!/usr/bin/env zsh
-# tm-kill-session — fzf でセッションを選択して削除
+# tm-kill-session — fzf でセッションを選択して削除（現在のセッションも対象）
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
 
 current=$(tmux display -p '#{session_name}' 2>/dev/null)
 
+_ensure_main() {
+  tmux has-session -t "=main" 2>/dev/null || tmux new-session -d -s "main" -c "$HOME"
+}
+
 session=$(
   tmux list-sessions -F "#{session_name}" 2>/dev/null \
-    | grep -v "^${current}$" \
+    | awk -v cur="$current" '{
+        if ($0 == cur) print "* " $0
+        else           print "  " $0
+      }' \
     | fzf --prompt="Kill session > " \
           --height=80% --layout=reverse --border \
-          --header="Select session to DELETE  (current: ${current})"
+          --header="Select session to DELETE  (* = current)" \
+    | sed 's/^[* ] *//'
 )
 [[ -z "$session" ]] && exit 0
 
 printf "Kill '%s'? (Y/n): " "$session"
-read ans
+read -r ans
 [[ -n "$ans" && ! "$ans" =~ ^[yY]$ ]] && echo "Cancelled." && exit 0
 
-tmux kill-session -t "=$session"
-echo "✅ Killed: $session"
-sleep 0.5
+is_current=0
+[[ "$session" == "$current" ]] && is_current=1
+
+if [[ "$session" == "main" ]]; then
+  if (( is_current )); then
+    # 現在の main セッションを削除して再作成する場合
+    other=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v "^main$" | head -1)
+    echo "✅ Killed: ${session} (recreating...)"
+    [[ -n "$other" ]] && tmux switch-client -t "=$other" 2>/dev/null
+    tmux kill-session -t "=main" 2>/dev/null
+    tmux new-session -d -s "main" -c "$HOME"
+    tmux switch-client -t "=main" 2>/dev/null
+  else
+    # 別のセッションから main を削除して再作成する場合
+    tmux kill-session -t "=main" 2>/dev/null
+    tmux new-session -d -s "main" -c "$HOME"
+    echo "✅ Killed: ${session} (recreated)"
+    sleep 0.5
+  fi
+elif (( is_current )); then
+  # 現在の非 main セッションを削除: main を確保し、ポップアップ/window 終了後に削除
+  _ensure_main
+  sn="$session"
+  echo "✅ Killed: ${session}"
+  tmux run-shell -d 1 "tmux switch-client -t '=main' 2>/dev/null; tmux kill-session -t '=${sn}' 2>/dev/null"
+else
+  # 非カレントセッションを削除する通常ケース
+  tmux kill-session -t "=$session"
+  echo "✅ Killed: $session"
+  sleep 0.5
+fi
