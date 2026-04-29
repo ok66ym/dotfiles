@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # CFO-Alpha: worktree 接続フック（セッションに入る時 / 新規セッション作成時）
-# pane 1.2 が存在しなければ作成し、サーバーが停止していれば起動する
+# 別セッションのサーバーを停止し、このセッションのサーバーを起動する
 #
 # 引数: $1=session_name  $2=wtdir
 
@@ -9,6 +9,18 @@ wtdir="$2"
 ACTIVE_SERVER_FILE="$HOME/.config/tm-wt/active-server"
 
 [[ -d "$wtdir/front" ]] || exit 0
+
+# 別セッションのサーバーを停止
+if [[ -f "$ACTIVE_SERVER_FILE" ]]; then
+  prev_session=$(cat "$ACTIVE_SERVER_FILE")
+  if [[ -n "$prev_session" && "$prev_session" != "$session_name" ]]; then
+    prev_pane_cmd=$(tmux display-message -t "${prev_session}:1.2" \
+      -p "#{pane_current_command}" 2>/dev/null)
+    if [[ "$prev_pane_cmd" == "node" || "$prev_pane_cmd" == "npm" ]]; then
+      tmux send-keys -t "${prev_session}:1.2" "C-c" ""
+    fi
+  fi
+fi
 
 # pane 1.2 がなければ作成
 pane_count=$(tmux list-panes -t "${session_name}:1" 2>/dev/null | wc -l | tr -d ' ')

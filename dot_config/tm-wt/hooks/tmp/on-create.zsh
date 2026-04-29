@@ -1,9 +1,14 @@
 #!/usr/bin/env zsh
 # CFO-Alpha: worktree 新規作成フック
-# pane 1.2 を作成してフロントサーバー (npm run watch) を起動する
-# .code-workspace を生成してVSCodeをworktreeのみで開く
-#   - folders: worktreeのみ（ファイルエクスプローラーに余分なフォルダを出さない）
-#   - git.scanRepositories: メインリポジトリを指定（GitHub PR拡張機能等が正常動作するため）
+#
+# 作成されるウィンドウ構成:
+#   Window 1 (terminal):
+#     pane 1.1 — 汎用ターミナル（Claude Code 起動など）
+#     pane 1.2 — npm run watch（フロントサーバー）
+#   Window 2 (nvim):
+#     Neovim をワークツリールートで起動
+#
+# .code-workspace を生成して VSCode もバックグラウンドで起動する。
 #
 # 将来バックエンドサーバーを起動する場合は pane 1.3 を作成して
 # bundle exec rails server などを追加する
@@ -46,3 +51,10 @@ fi
 
 mkdir -p "$HOME/.config/tm-wt"
 echo "$session_name" > "$HOME/.config/tm-wt/active-server"
+
+# Window 2: Neovim をワークツリールートで起動
+tmux new-window -t "${session_name}" -n "nvim" -c "$wtdir"
+tmux send-keys -t "${session_name}:nvim" "nvim ." Enter
+
+# 起動直後は Neovim window にフォーカスを移す
+tmux select-window -t "${session_name}:nvim"

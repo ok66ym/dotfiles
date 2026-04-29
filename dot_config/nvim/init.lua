@@ -1,9 +1,8 @@
--- プラグインマネージャーの起動 (lazy.lua)
--- 慣れるまで使用しない
--- require("config.lazy")
+-- netrw を最初に無効化（どのプラグインよりも先に設定する必要あり）
+vim.g.loaded_netrw       = 1
+vim.g.loaded_netrwPlugin = 1
 
--- 基本オプション (options.lua)
+require("config.lazy")
 require("config.options")
-
--- キーバインド (keymaps.lua)
 require("config.keymaps")
+require("config.autocmds")

@@ -1,0 +1,89 @@
+#!/usr/bin/env zsh
+# claude-prompt-edit CALLER_PANE_ID
+#
+# tmux の prefix + Ctrl+g から display-popup 経由で呼ばれる。
+# Neovim でプロンプトを編集し、Claude Code が動いているペインに送信する。
+#
+# 複数行テキストは Shift+Enter 相当（ESC + CR = \x1b\r）で区切って送信する。
+# これは Ghostty の shift+enter=text:\x1b\r 設定と同じシーケンスで、
+# Claude Code が改行として認識する。
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+
+CALLER_PANE_ID="${1:-}"
+TMPFILE=$(mktemp /tmp/claude-prompt-XXXXXX.md)
+trap "rm -f $TMPFILE" EXIT
+
+# Neovim でプロンプトを編集（markdown シンタックス・カーソルは末尾）
+nvim -c "setlocal filetype=markdown" -c "norm G$" "$TMPFILE"
+
+# 内容が空なら終了
+CONTENT=$(cat "$TMPFILE" 2>/dev/null)
+[[ -z "$(printf '%s' "$CONTENT" | tr -d '[:space:]')" ]] && exit 0
+
+# --------------------------------------------------
+# Claude Code が動いているペインを特定する
+# 優先順位:
+#   1. 呼び出し元と同じウィンドウ内の claude/node プロセス
+#   2. /tmp/claude-status/ で waiting 状態のペイン
+# --------------------------------------------------
+TARGET_PANE=""
+
+# 1. 同一ウィンドウから探す
+if [[ -n "$CALLER_PANE_ID" ]]; then
+  SESSION=$(tmux display-message -t "$CALLER_PANE_ID" -p "#{session_name}" 2>/dev/null)
+  WIN=$(tmux display-message -t "$CALLER_PANE_ID" -p "#{window_index}" 2>/dev/null)
+  if [[ -n "$SESSION" && -n "$WIN" ]]; then
+    while IFS=$'\t' read -r pane_id cmd; do
+      [[ "$pane_id" == "$CALLER_PANE_ID" ]] && continue
+      case "$cmd" in
+        node|claude) TARGET_PANE="$pane_id"; break ;;
+      esac
+    done < <(tmux list-panes -t "${SESSION}:${WIN}" -F "#{pane_id}\t#{pane_current_command}" 2>/dev/null)
+  fi
+fi
+
+# 2. /tmp/claude-status/ から waiting 状態のペインを探す
+if [[ -z "$TARGET_PANE" && -d /tmp/claude-status ]]; then
+  for f in /tmp/claude-status/%*; do
+    [[ -f "$f" ]] || continue
+    status=$(cat "$f" 2>/dev/null)
+    if [[ "$status" == "waiting" ]]; then
+      TARGET_PANE=$(basename "$f")
+      break
+    fi
+  done
+fi
+
+if [[ -z "$TARGET_PANE" ]]; then
+  print "Claude Code が動いているペインが見つかりませんでした。"
+  print "Claude Code を起動してから再試行してください。"
+  sleep 3
+  exit 1
+fi
+
+# --------------------------------------------------
+# テキストを送信する
+# 複数行は Shift+Enter 相当（\x1b\r）で区切る
+# 最後の行の後に Enter で送信
+# --------------------------------------------------
+line_count=$(printf '%s\n' "$CONTENT" | wc -l | tr -d ' ')
+current_line=0
+
+printf '%s\n' "$CONTENT" | while IFS= read -r line; do
+  current_line=$((current_line + 1))
+  tmux send-keys -t "$TARGET_PANE" "$line" ""
+  if (( current_line < line_count )); then
+    # Shift+Enter 相当: ESC + CR
+    tmux send-keys -t "$TARGET_PANE" $'\x1b\r' ""
+  fi
+done
+
+# Enter で送信
+tmux send-keys -t "$TARGET_PANE" "" Enter
+
+# 送信先セッションにフォーカスを移す
+TARGET_SESSION=$(tmux display-message -t "$TARGET_PANE" -p "#{session_name}" 2>/dev/null)
+[[ -n "$TARGET_SESSION" ]] && tmux switch-client -t "$TARGET_SESSION" 2>/dev/null
+
+exit 0

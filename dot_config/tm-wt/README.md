@@ -145,6 +145,18 @@ session_name="$1"
 wtdir="$2"
 ACTIVE_SERVER_FILE="$HOME/.config/tm-wt/active-server"
 
+# 別セッションのサーバーを停止
+if [[ -f "$ACTIVE_SERVER_FILE" ]]; then
+  prev_session=$(cat "$ACTIVE_SERVER_FILE")
+  if [[ -n "$prev_session" && "$prev_session" != "$session_name" ]]; then
+    prev_pane_cmd=$(tmux display-message -t "${prev_session}:1.2" \
+      -p "#{pane_current_command}" 2>/dev/null)
+    if [[ "$prev_pane_cmd" == "node" || "$prev_pane_cmd" == "npm" ]]; then
+      tmux send-keys -t "${prev_session}:1.2" "C-c" ""
+    fi
+  fi
+fi
+
 # pane 1.2 がなければ作成
 pane_count=$(tmux list-panes -t "${session_name}:1" 2>/dev/null | wc -l | tr -d ' ')
 if (( pane_count < 2 )); then

@@ -1,0 +1,33 @@
+#!/usr/bin/env zsh
+# tm-docs: fzf でドキュメントを選択して表示する
+# tmux の prefix + ? から display-popup 経由で呼ばれる
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+
+docs=(
+  "Ghostty + tmux 操作ガイド|$HOME/.config/ghostty/usage.md"
+  "worktree 設定リファレンス|$HOME/.config/tm-wt/README.md"
+  "Neovim 概要・設定修正ガイド|$HOME/.config/nvim/OVERVIEW.md"
+  "Neovim チュートリアル インデックス|$HOME/.config/nvim/TUTORIAL.md"
+  "Neovim チュートリアル 1: Vim 基本|$HOME/.config/nvim/TUTORIAL_01_vim_basics.md"
+  "Neovim チュートリアル 2: ファイル操作|$HOME/.config/nvim/TUTORIAL_02_files.md"
+  "Neovim チュートリアル 3: コード操作|$HOME/.config/nvim/TUTORIAL_03_code.md"
+  "Neovim チュートリアル 4: 環境操作|$HOME/.config/nvim/TUTORIAL_04_environment.md"
+  "Neovim 操作ガイド|$HOME/.config/nvim/USAGE.md"
+  "Neovim プラグイン一覧|$HOME/.config/nvim/PLUGINS.md"
+)
+
+selected=$(printf '%s\n' "${docs[@]}" \
+  | fzf --prompt="📖 ドキュメント > " \
+        --height=40% \
+        --layout=reverse \
+        --border \
+  | cut -d'|' -f2)
+
+[[ -z "$selected" ]] && exit 0
+
+if command -v bat &>/dev/null; then
+  bat --style=plain --paging=always --language=md "$selected"
+else
+  less "$selected"
+fi
