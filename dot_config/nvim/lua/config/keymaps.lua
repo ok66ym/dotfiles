@@ -33,6 +33,14 @@ map("n", "<Leader>wm", "<C-w>|<C-w>_", { desc = "ウィンドウを最大化" })
 map({ "n", "v" }, "j", "gj", { silent = true })
 map({ "n", "v" }, "k", "gk", { silent = true })
 
+-- 選択範囲を上下に移動 (Meta + j/k)
+map("v", "<M-j>", ":m '>+1<CR>gv=gv", { desc = "選択範囲を下に移動" })
+map("v", "<M-k>", ":m '<-2<CR>gv=gv", { desc = "選択範囲を上に移動" })
+
+-- ノーマルモードでも1行移動 (Meta + j/k)
+map("n", "<M-j>", ":m .+1<CR>==", { desc = "1行下に移動" })
+map("n", "<M-k>", ":m .-2<CR>==", { desc = "1行上に移動" })
+
 -- インデント維持したままビジュアル選択を継続
 map("v", "<", "<gv")
 map("v", ">", ">gv")
