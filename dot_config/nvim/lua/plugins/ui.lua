@@ -55,6 +55,18 @@ return {
             end
             return table.concat(ret, " ")
           end,
+          -- 不要なバッファをタブ一覧に表示しない
+          custom_filter = function(buf_number, _)
+            local ft   = vim.bo[buf_number].filetype
+            local name = vim.fn.bufname(buf_number)
+            -- NO NAME（名前なし空バッファ）を非表示
+            if name == "" and vim.fn.getbufvar(buf_number, "&modified") == 0 then
+              return false
+            end
+            return ft ~= "neo-tree"
+              and ft ~= "netrw"
+              and vim.fn.isdirectory(name) == 0
+          end,
           offsets = {
             {
               filetype = "neo-tree",
@@ -79,13 +91,15 @@ return {
         win = { border = "rounded" },
       })
       wk.add({
-        { "<Leader>f", group = "Find (Telescope)" },
-        { "<Leader>g", group = "Git" },
-        { "<Leader>c", group = "Code (LSP)" },
-        { "<Leader>b", group = "Buffer" },
-        { "<Leader>d", group = "Diagnostics" },
-        { "<Leader>w", group = "Window" },
-        { "<Leader>?", group = "Docs (o=概要 / r=tutorial-index / 1-4=tutorial / u=USAGE / p=PLUGINS / t=tmux / w=worktree)" },
+        { "<Leader>f",  group = "Find (Telescope)" },
+        { "<Leader>g",  group = "Git" },
+        { "<Leader>c",  group = "Code / Format" },
+        { "<Leader>b",  group = "Buffer" },
+        { "<Leader>d",  group = "Diagnostics" },
+        { "<Leader>w",  group = "Window" },
+        { "<Leader>q",  group = "Session" },
+        { "<Leader>o",  group = "Obsidian" },
+        { "<Leader>?",  group = "Docs (o=概要 / r=tutorial-index / 1-4=tutorial / u=USAGE / p=PLUGINS / b=obsidian / t=tmux / w=worktree)" },
       })
     end,
   },

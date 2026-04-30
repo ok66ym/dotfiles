@@ -16,6 +16,7 @@
 | `<Leader>?o` | `OVERVIEW.md` | このファイル。構成・修正方法のガイド |
 | `<Leader>?u` | `USAGE.md` | 全キーバインドの早見表 |
 | `<Leader>?p` | `PLUGINS.md` | 導入プラグインの説明・設定・操作方法 |
+| `<Leader>?b` | `OBSIDIAN.md` | Obsidian プラグインの操作ガイド |
 | `<Leader>?r` | `TUTORIAL.md` | チュートリアルのインデックス |
 | `<Leader>?1` | `TUTORIAL_01_vim_basics.md` | Vim 基本（モード・移動・編集・保存） |
 | `<Leader>?2` | `TUTORIAL_02_files.md` | ファイル操作（neo-tree・Telescope・バッファ） |
@@ -242,15 +243,46 @@ opt.relativenumber = false
 
 ---
 
-### プラグインの見た目・動作を変更する
+### エクスプローラー（neo-tree）の幅を変更する
 
-**例: neo-tree の幅を変更する**（ファイル: `lua/plugins/explorer.lua`）
+**ファイル**: `lua/plugins/explorer.lua`
 
 ```lua
 window = {
-  width = 70,  -- 列数で指定（デフォルト: 30）
+  width = 30,  -- 列数で指定（現在: 70）
 },
 ```
+
+幅を小さくするほどエディタ領域が広くなる。推奨値は 25〜40。
+
+---
+
+### エディタの背景透明度を調整する
+
+透明度は **Ghostty の設定ファイル** で管理している。
+Neovim の Dracula テーマは `transparent_bg = true` が有効なので、
+Ghostty 側の値がそのままエディタ背景に反映される。
+
+**ファイル**: `~/.config/ghostty/config.ghostty`
+
+```ini
+background-opacity = 0.9   # 0.0（完全透明）〜 1.0（不透明）
+```
+
+変更後は Ghostty を `super+r`（設定再読込）または再起動すると即反映される。
+
+透明度の目安:
+| 値 | 見た目 |
+|----|-------|
+| `1.0` | 完全不透明（背景なし） |
+| `0.9` | 少し透ける（デフォルト） |
+| `0.8` | 背景が見える |
+| `0.5` | かなり透明 |
+| `0.0` | 完全透明 |
+
+---
+
+### プラグインの見た目・動作を変更する
 
 ---
 
@@ -392,6 +424,54 @@ chezmoi git -- log --oneline -5  # 直近のコミットを確認
 :verbose map <Leader>x   → そのキーに何が割り当てられているか確認
 :checkhealth which-key   → which-key の状態確認
 ```
+
+### プラグインが競合・エラーを起こす
+
+1. `:Lazy` を開いてエラーが出ているプラグインを確認する（赤くなっている）
+2. `l` を押すとエラーログを確認できる
+3. 競合するプラグインの設定ファイルを特定して修正する
+4. `:Lazy reload プラグイン名` で単体再読み込みを試みる
+5. それでも解決しない場合は `:Lazy clean` → `:Lazy sync` でクリーンインストール
+
+### 特定プラグインを一時的に無効化したい
+
+`lua/plugins/` 内の該当ファイルを開き、プラグイン定義に `enabled = false` を追加する:
+
+```lua
+return {
+  {
+    "author/plugin-name",
+    enabled = false,   -- 追加
+    ...
+  },
+}
+```
+
+Neovim を再起動すると無効化される。
+
+### conform.nvim（フォーマット）が動かない
+
+```
+:ConformInfo   → フォーマッターの状態確認
+```
+
+Ruby（rubocop）が動かない場合:
+- カレントディレクトリに `Gemfile` がないと rubocop は起動しない（require_cwd = true のため）
+- `bundle exec rubocop --version` でインストール確認
+- `bundle install` で依存関係を解決してから再試行
+
+TypeScript（prettier）が動かない場合:
+- `npm install -g prettier` でグローバルインストール
+- またはプロジェクト内 `./node_modules/.bin/prettier` が使われる
+
+### obsidian.nvim が動かない
+
+```
+:checkhealth obsidian   → 詳細な状態確認
+```
+
+Vault 内の `.md` ファイルを開いた時のみ読み込まれる（遅延読み込み）。
+Vault 外の `.md` ファイルでは obsidian.nvim の機能は使えない。
 
 ### neo-tree で `<Leader>` キーが効かない
 

@@ -2,7 +2,7 @@ local opt = vim.opt
 
 -- 行番号
 opt.number = true
-opt.relativenumber = true
+opt.relativenumber = false
 
 -- クリップボード（システムと同期）
 opt.clipboard = "unnamedplus"

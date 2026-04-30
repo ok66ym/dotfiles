@@ -23,7 +23,58 @@ map("n", "<Esc>", ":nohlsearch<CR>", { silent = true })
 -- バッファ操作
 map("n", "<Leader>bn", ":bnext<CR>", { desc = "次のバッファ" })
 map("n", "<Leader>bp", ":bprev<CR>", { desc = "前のバッファ" })
-map("n", "<Leader>bd", ":bdelete<CR>", { desc = "バッファを閉じる" })
+
+-- Neovim を終了する（全ウィンドウを保存して閉じる）
+-- ZZ のデフォルト動作はカレントウィンドウだけ閉じるため、neo-tree が残って2回必要になる
+-- wqa で全ウィンドウを一括終了することで VimLeavePre が正しいタイミングで発火し
+-- セッションに「現在開いているファイル」が正確に保存される
+map("n", "ZZ", function()
+  local ok, err = pcall(vim.cmd, "wqa")
+  if not ok then
+    vim.notify(tostring(err), vim.log.levels.WARN)
+  end
+end, { desc = "全バッファを保存して終了" })
+
+-- バッファを閉じる（:bd / <Leader>bd 共通ロジック）
+local function close_buffer()
+  local bufnr = vim.api.nvim_get_current_buf()
+  if vim.bo[bufnr].filetype == "neo-tree" then
+    vim.notify("ファイルバッファにフォーカスしてから閉じてください", vim.log.levels.WARN)
+    return
+  end
+  -- 未保存の変更があれば先に警告して中断（削除前にチェックすることで確実に検出）
+  if vim.bo[bufnr].modified then
+    vim.notify("未保存の変更があります。:w で保存してから閉じてください", vim.log.levels.WARN)
+    return
+  end
+  -- 切り替え先: listed かつ名前あり かつ neo-tree でないバッファを探す
+  local target = nil
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if b ~= bufnr
+      and vim.fn.buflisted(b) == 1
+      and vim.fn.bufname(b) ~= ""
+      and vim.bo[b].filetype ~= "neo-tree"
+    then
+      target = b
+      break
+    end
+  end
+  if target then
+    vim.api.nvim_set_current_buf(target)
+  else
+    vim.cmd("enew")
+    vim.bo.buflisted = false
+  end
+  -- modified は上で確認済みなので force=true で確実に削除する
+  pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+end
+
+map("n", "<Leader>bd", close_buffer, { desc = "バッファを閉じる" })
+
+-- :bd / :bdelete をスマート関数にリダイレクト
+vim.api.nvim_create_user_command("Bd", close_buffer, {})
+vim.cmd("cnoreabbrev bd Bd")
+vim.cmd("cnoreabbrev bdelete Bd")
 
 -- ウィンドウサイズ調整
 map("n", "<Leader>w=", "<C-w>=", { desc = "ウィンドウを均等割り" })
@@ -96,5 +147,6 @@ map("n", "<Leader>?3", function() open_doc("~/.config/nvim/TUTORIAL_03_code.md")
 map("n", "<Leader>?4", function() open_doc("~/.config/nvim/TUTORIAL_04_environment.md") end,{ desc = "チュートリアル 4: 環境操作" })
 map("n", "<Leader>?u", function() open_doc("~/.config/nvim/USAGE.md") end,                  { desc = "Neovim USAGE.md" })
 map("n", "<Leader>?p", function() open_doc("~/.config/nvim/PLUGINS.md") end,                { desc = "Neovim PLUGINS.md" })
+map("n", "<Leader>?b", function() open_doc("~/.config/nvim/OBSIDIAN.md") end,               { desc = "Obsidian 操作ガイド" })
 map("n", "<Leader>?t", function() open_doc("~/.config/ghostty/usage.md") end,               { desc = "Ghostty + tmux 操作ガイド" })
 map("n", "<Leader>?w", function() open_doc("~/.config/tm-wt/README.md") end,                { desc = "worktree リファレンス" })

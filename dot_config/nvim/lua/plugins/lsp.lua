@@ -1,5 +1,5 @@
 return {
-  { "neovim/nvim-lspconfig", lazy = true },
+  { "neovim/nvim-lspconfig" },
   {
     "williamboman/mason.nvim",
     cmd = "Mason",
@@ -26,6 +26,8 @@ return {
     },
     event = { "BufReadPre", "BufNewFile" },
     config = function()
+      -- mason-lspconfig の automatic_enable を無効化することで
+      -- lspconfig.*.setup() による管理と競合させない
       require("mason-lspconfig").setup({
         ensure_installed = {
           "lua_ls",    -- Lua（Neovim 設定用）
@@ -33,6 +35,7 @@ return {
           "ts_ls",     -- TypeScript / JavaScript
         },
         automatic_installation = true,
+        automatic_enable = false,
       })
 
       local lspconfig = require("lspconfig")
@@ -51,10 +54,9 @@ return {
           require("telescope.builtin").lsp_implementations({ reuse_win = true })
         end, opts)
         vim.keymap.set("n", "K",          vim.lsp.buf.hover,                               opts)
-        vim.keymap.set("n", "<Leader>ca", vim.lsp.buf.code_action,                         opts)
-        vim.keymap.set("n", "<Leader>rn", vim.lsp.buf.rename,                              opts)
-        vim.keymap.set("n", "<Leader>cf", function() vim.lsp.buf.format({ async = true }) end, opts)
-        vim.keymap.set("n", "[d",         vim.diagnostic.goto_prev,                        opts)
+        vim.keymap.set("n", "<Leader>ca", vim.lsp.buf.code_action,  opts)
+        vim.keymap.set("n", "<Leader>rn", vim.lsp.buf.rename,      opts)
+        vim.keymap.set("n", "[d",         vim.diagnostic.goto_prev, opts)
         vim.keymap.set("n", "]d",         vim.diagnostic.goto_next,                        opts)
         vim.keymap.set("n", "<Leader>dl", vim.diagnostic.open_float,                       opts)
       end
@@ -79,6 +81,7 @@ return {
       })
 
       -- TypeScript / JavaScript / React
+      -- root_dir は tsconfig.json を優先し、worktree 環境でも front/ をルートとして検出する
       lspconfig.ts_ls.setup({
         capabilities = capabilities,
         on_attach = on_attach,
@@ -86,7 +89,6 @@ return {
           "typescript", "typescriptreact",
           "javascript", "javascriptreact",
         },
-        -- worktree 環境でもプロジェクトルートを正しく検出する
         root_dir = lspconfig.util.root_pattern(
           "tsconfig.json", "jsconfig.json", "package.json", ".git"
         ),

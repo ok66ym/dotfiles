@@ -15,7 +15,7 @@ return {
     },
     config = function()
       require("neo-tree").setup({
-        close_if_last_window = true,
+        close_if_last_window = false,
         window = {
           width = 70,
           mappings = {
@@ -33,15 +33,6 @@ return {
           },
           follow_current_file = { enabled = true },
           use_libuv_file_watcher = true,
-        },
-        event_handlers = {
-          -- ファイルを開いたらエクスプローラーにフォーカスを戻さない
-          {
-            event = "file_opened",
-            handler = function()
-              require("neo-tree.command").execute({ action = "close" })
-            end,
-          },
         },
       })
     end,
