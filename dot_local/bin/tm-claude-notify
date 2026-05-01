@@ -1,0 +1,61 @@
+#!/usr/bin/env zsh
+# tm-claude-notify TYPE
+# Claude Code フック（Notification / Stop）から呼ばれる通知スクリプト。
+# TYPE: waiting | permission
+#
+# 通知方法（優先順）:
+#   1. tmux display-message  — tmux ステータスバーに表示（常に機能）
+#   2. pane tty への BEL     — Ghostty のベル処理
+#   3. terminal-notifier     — macOS 通知センターに確実に届く（brew install terminal-notifier）
+#      └ -sender com.apple.Terminal で Terminal.app の通知として届くため追加許可不要
+#   4. osascript fallback    — terminal-notifier 未インストール時
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+
+type="${1:-waiting}"
+PANE=$(tmux display -p '#{pane_id}' 2>/dev/null)
+
+case "$type" in
+  waiting)
+    msg="作業完了・入力待ち"
+    title="Claude Code ✅"
+    sound="Glass"
+    tmux_msg="✅ Claude Code: 作業完了"
+    ;;
+  permission)
+    msg="許可または回答が必要です"
+    title="Claude Code ❓"
+    sound="Ping"
+    tmux_msg="❓ Claude Code: 許可・回答が必要"
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+
+# 1. tmux ステータスバー通知（常に機能）
+[ -n "$PANE" ] && tmux display-message -d 6000 "$tmux_msg"
+
+# 2. pane の tty に BEL を書き込む（Ghostty のベル処理）
+if [ -n "$PANE" ]; then
+  pane_tty=$(tmux display-message -t "$PANE" -p '#{pane_tty}' 2>/dev/null)
+  [ -n "$pane_tty" ] && printf '\007' > "$pane_tty" 2>/dev/null
+fi
+
+# 3. macOS 通知センター
+if command -v terminal-notifier &>/dev/null; then
+  # -sender com.apple.Terminal: Terminal.app の通知として届くため
+  # System Settings での追加許可が不要（Terminal は通常デフォルト許可済み）
+  # -group claude-code: 同グループの古い通知を新しいもので上書き（積み上がらない）
+  terminal-notifier \
+    -title "$title" \
+    -message "$msg" \
+    -sound "$sound" \
+    -sender com.apple.Terminal \
+    -group "claude-code" \
+    2>/dev/null
+else
+  # terminal-notifier 未インストール時のフォールバック
+  # 動作しない場合は: brew install terminal-notifier
+  osascript -e "display notification \"$msg\" with title \"$title\" sound name \"$sound\"" 2>/dev/null
+fi

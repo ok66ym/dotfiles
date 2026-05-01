@@ -19,6 +19,8 @@
 | `<Leader>?2` | チュートリアル 2: ファイル操作 |
 | `<Leader>?3` | チュートリアル 3: コード操作 |
 | `<Leader>?4` | チュートリアル 4: 環境操作（このドキュメント） |
+| `<Leader>?5` | チュートリアル 5: GitHub PR（octo.nvim） |
+| `<Leader>?6` | チュートリアル 6: Obsidian ノート管理 |
 | `<Leader>?u` | Neovim USAGE.md（キーバインド早見表） |
 | `<Leader>?p` | Neovim PLUGINS.md（プラグイン説明） |
 | `<Leader>?t` | Ghostty + tmux 操作ガイド |

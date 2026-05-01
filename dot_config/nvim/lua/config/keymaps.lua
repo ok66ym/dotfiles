@@ -1,7 +1,6 @@
-vim.g.mapleader = " "
-vim.g.maplocalleader = "\\"
-
+-- mapleader / maplocalleader は init.lua で設定済み
 local map = vim.keymap.set
+local sidebar = require("utils.sidebar")
 
 -- インサートモードを抜ける
 map("i", "jj", "<Esc>", { silent = true })
@@ -108,10 +107,62 @@ map("n", "<Leader>fh", "<cmd>Telescope help_tags<CR>", { desc = "ヘルプ検索
 map("n", "<Leader>/",  "<cmd>Telescope current_buffer_fuzzy_find<CR>", { desc = "バッファ内検索" })
 
 -- ファイルエクスプローラー
--- focus: 閉じていれば開いてフォーカス / 開いていればフォーカスを移す（閉じない）
--- 閉じたい場合は neo-tree 内で q を押す
-map("n", "<Leader>e", ":Neotree focus<CR>",  { desc = "エクスプローラーにフォーカス" })
-map("n", "<Leader>o", ":Neotree reveal<CR>", { desc = "現在ファイルをエクスプローラーで表示" })
+-- <Leader>e: 「アクティブなサイドバー」↔ エディタのフォーカスをトグル
+--   エディタにいる + snacks picker が開いている → snacks picker にフォーカス
+--   エディタにいる + snacks picker が閉じている → neo-tree にフォーカス（なければ開く）
+--   neo-tree にいる      → エディタに戻る
+--   snacks picker にいる → エディタに戻る（picker は開いたまま）
+map("n", "<Leader>e", function()
+  local ft = vim.bo[vim.api.nvim_get_current_buf()].filetype
+  if ft == "neo-tree" then
+    -- neo-tree → エディタ側の最初のウィンドウへ移動
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local wft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+      local cfg = vim.api.nvim_win_get_config(win)
+      if wft ~= "neo-tree" and cfg.relative == "" then
+        vim.api.nvim_set_current_win(win)
+        return
+      end
+    end
+  elseif ft:match("^snacks_picker") then
+    -- snacks picker → エディタ側の最初のウィンドウへ移動（picker は開いたまま）
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local wft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
+      local cfg = vim.api.nvim_win_get_config(win)
+      if not wft:match("^snacks_picker") and wft ~= "neo-tree" and cfg.relative == "" then
+        vim.api.nvim_set_current_win(win)
+        return
+      end
+    end
+  else
+    -- エディタ → snacks picker が開いていればそちらへフォーカス、なければ neo-tree を開く
+    if sidebar.has_snacks_picker() then
+      for _, win in ipairs(vim.api.nvim_list_wins()) do
+        local ok, buf = pcall(vim.api.nvim_win_get_buf, win)
+        if ok and vim.bo[buf].filetype == "snacks_picker_list" then
+          vim.api.nvim_set_current_win(win)
+          return
+        end
+      end
+    else
+      local file = vim.fn.expand("%:p")
+      local cwd  = vim.fn.getcwd()
+      -- 現在のファイルが cwd 外にある時だけ dir を指定して
+      -- follow_current_file の「File not in cwd」プロンプトを抑制する
+      -- cwd 内の通常ファイルは標準の Neotree focus を使う（余分な navigate を避ける）
+      if file ~= "" and vim.fn.isdirectory(file) == 0
+          and not vim.startswith(file, cwd .. "/") and file ~= cwd then
+        pcall(require("neo-tree.command").execute, { action = "focus", dir = cwd })
+      else
+        vim.cmd("Neotree focus")
+      end
+    end
+  end
+end, { desc = "アクティブなサイドバー ↔ エディタ フォーカス切り替え" })
+
+-- <Leader>E: 編集中のファイルを neo-tree のツリー内でハイライト表示する
+-- VS Code の「エクスプローラーで表示」相当。エディタにフォーカスがある時に使う。
+map("n", "<Leader>E", ":Neotree reveal<CR>", { desc = "現在ファイルをツリーで表示" })
 
 -- lazygit（snacks.nvim）
 map("n", "<Leader>gg", function() require("snacks").lazygit() end, { desc = "lazygit" })
@@ -120,6 +171,9 @@ map("n", "<Leader>gL", function() require("snacks").lazygit.log_file() end, { de
 
 -- ターミナル（snacks.nvim）
 map("n", "<Leader>t", function() require("snacks").terminal() end, { desc = "ターミナルをトグル" })
+
+-- 通知履歴（消えたエラー通知を再確認する）
+map("n", "<Leader>n", function() require("snacks").notifier.show_history() end, { desc = "通知履歴" })
 
 -- Trouble（診断リスト）
 map("n", "<Leader>d",  ":Trouble diagnostics toggle<CR>", { desc = "診断リスト" })
@@ -139,14 +193,18 @@ local function open_doc(path)
   vim.keymap.set("n", "q", ":close<CR>", { buffer = buf, silent = true })
   require("snacks").win({ buf = buf, width = 0.8, height = 0.9, border = "rounded" })
 end
-map("n", "<Leader>?o", function() open_doc("~/.config/nvim/OVERVIEW.md") end,              { desc = "概要・設定修正ガイド" })
-map("n", "<Leader>?r", function() open_doc("~/.config/nvim/TUTORIAL.md") end,              { desc = "チュートリアル インデックス" })
-map("n", "<Leader>?1", function() open_doc("~/.config/nvim/TUTORIAL_01_vim_basics.md") end, { desc = "チュートリアル 1: Vim 基本" })
-map("n", "<Leader>?2", function() open_doc("~/.config/nvim/TUTORIAL_02_files.md") end,      { desc = "チュートリアル 2: ファイル操作" })
-map("n", "<Leader>?3", function() open_doc("~/.config/nvim/TUTORIAL_03_code.md") end,       { desc = "チュートリアル 3: コード操作" })
-map("n", "<Leader>?4", function() open_doc("~/.config/nvim/TUTORIAL_04_environment.md") end,{ desc = "チュートリアル 4: 環境操作" })
-map("n", "<Leader>?u", function() open_doc("~/.config/nvim/USAGE.md") end,                  { desc = "Neovim USAGE.md" })
-map("n", "<Leader>?p", function() open_doc("~/.config/nvim/PLUGINS.md") end,                { desc = "Neovim PLUGINS.md" })
-map("n", "<Leader>?b", function() open_doc("~/.config/nvim/OBSIDIAN.md") end,               { desc = "Obsidian 操作ガイド" })
-map("n", "<Leader>?t", function() open_doc("~/.config/ghostty/usage.md") end,               { desc = "Ghostty + tmux 操作ガイド" })
-map("n", "<Leader>?w", function() open_doc("~/.config/tm-wt/README.md") end,                { desc = "worktree リファレンス" })
+map("n", "<Leader>?o", function() open_doc("~/.config/nvim/OVERVIEW.md") end,               { desc = "概要・設定修正ガイド" })
+map("n", "<Leader>?r", function() open_doc("~/.config/nvim/TUTORIAL.md") end,               { desc = "チュートリアル インデックス" })
+map("n", "<Leader>?1", function() open_doc("~/.config/nvim/TUTORIAL_01_vim_basics.md") end,  { desc = "チュートリアル 1: Vim 基本" })
+map("n", "<Leader>?2", function() open_doc("~/.config/nvim/TUTORIAL_02_files.md") end,       { desc = "チュートリアル 2: ファイル操作" })
+map("n", "<Leader>?3", function() open_doc("~/.config/nvim/TUTORIAL_03_code.md") end,        { desc = "チュートリアル 3: コード操作" })
+map("n", "<Leader>?4", function() open_doc("~/.config/nvim/TUTORIAL_04_environment.md") end, { desc = "チュートリアル 4: 環境操作" })
+map("n", "<Leader>?5", function() open_doc("~/.config/nvim/TUTORIAL_05_github_pr.md") end,    { desc = "チュートリアル 5: GitHub PR" })
+map("n", "<Leader>?6", function() open_doc("~/.config/nvim/TUTORIAL_06_obsidian.md") end,     { desc = "チュートリアル 6: Obsidian" })
+map("n", "<Leader>?u", function() open_doc("~/.config/nvim/USAGE.md") end,                    { desc = "Neovim USAGE.md" })
+map("n", "<Leader>?p", function() open_doc("~/.config/nvim/PLUGINS.md") end,                  { desc = "Neovim PLUGINS.md" })
+map("n", "<Leader>?b", function() open_doc("~/.config/nvim/OBSIDIAN.md") end,                 { desc = "Obsidian 操作ガイド" })
+map("n", "<Leader>?x", function() open_doc("~/.config/nvim/TROUBLESHOOTING.md") end,          { desc = "トラブルシューティング" })
+map("n", "<Leader>?t", function() open_doc("~/.config/ghostty/usage.md") end,                 { desc = "Ghostty + tmux 操作ガイド" })
+map("n", "<Leader>?w", function() open_doc("~/.config/tm-wt/README.md") end,                  { desc = "worktree リファレンス" })
+map("n", "<Leader>?c", function() open_doc("~/.config/nvim/CHEZMOI.md") end,                  { desc = "chezmoi 操作ガイド" })

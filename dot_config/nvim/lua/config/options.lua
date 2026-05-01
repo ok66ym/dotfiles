@@ -1,5 +1,12 @@
 local opt = vim.opt
 
+-- Homebrew の PATH を確実に追加
+-- tmux/GUI 起動時などで /opt/homebrew/bin が欠落することがある
+local homebrew = "/opt/homebrew/bin"
+if vim.fn.isdirectory(homebrew) == 1 and not vim.env.PATH:find(homebrew, 1, true) then
+  vim.env.PATH = homebrew .. ":" .. vim.env.PATH
+end
+
 -- 行番号
 opt.number = true
 opt.relativenumber = false

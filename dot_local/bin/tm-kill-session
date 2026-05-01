@@ -1,5 +1,6 @@
 #!/usr/bin/env zsh
 # tm-kill-session — fzf でセッションを選択して削除（現在のセッションも対象）
+# worktree セッションの場合は worktree・ローカルブランチの削除も選択可能
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
 
@@ -7,6 +8,37 @@ current=$(tmux display -p '#{session_name}' 2>/dev/null)
 
 _ensure_main() {
   tmux has-session -t "=main" 2>/dev/null || tmux new-session -d -s "main" -c "$HOME"
+}
+
+# セッション名に対応する worktree 情報を検索する
+# 出力: "MAIN_REPO|WTDIR|BRANCH" または空文字列
+_find_worktree_for_session() {
+  local session_name="$1"
+  local repos_file="$HOME/.config/tm-wt/repos"
+  [[ -f "$repos_file" ]] || return 0
+
+  while IFS= read -r main_repo; do
+    [[ -z "$main_repo" || ! -d "$main_repo" ]] && continue
+    local wt_base="${main_repo%/*}/$(basename "$main_repo").worktrees"
+    local cur_path="" cur_branch=""
+
+    while IFS= read -r line; do
+      if [[ "$line" == worktree\ * ]]; then
+        cur_path="${line#worktree }"
+        cur_branch=""
+      elif [[ "$line" == branch\ * ]]; then
+        cur_branch="${line#branch refs/heads/}"
+      elif [[ -z "$line" && -n "$cur_path" ]]; then
+        if [[ "$cur_path" == "${wt_base}/"* && "$(basename "$cur_path")" == "$session_name" ]]; then
+          echo "${main_repo}|${cur_path}|${cur_branch}"
+          return 0
+        fi
+        cur_path=""
+        cur_branch=""
+      fi
+    done < <(git -C "$main_repo" worktree list --porcelain 2>/dev/null; echo "")
+
+  done < "$repos_file"
 }
 
 session=$(
@@ -26,12 +58,57 @@ printf "Kill '%s'? (Y/n): " "$session"
 read -r ans
 [[ -n "$ans" && ! "$ans" =~ ^[yY]$ ]] && echo "Cancelled." && exit 0
 
+# worktree セッションかどうかを確認し、追加の削除オプションを提示
+wt_info=$(_find_worktree_for_session "$session")
+wt_main_repo=""
+wt_dir=""
+wt_branch=""
+do_delete_wt="n"
+do_delete_branch="n"
+
+if [[ -n "$wt_info" ]]; then
+  wt_main_repo="${wt_info%%|*}"
+  _rest="${wt_info#*|}"
+  wt_dir="${_rest%%|*}"
+  wt_branch="${_rest#*|}"
+
+  printf "Delete worktree '%s' too? (Y/n): " "$wt_branch"
+  read -r do_delete_wt
+
+  if [[ -z "$do_delete_wt" || "$do_delete_wt" =~ ^[yY]$ ]]; then
+    if [[ -n "$wt_branch" ]] && git -C "$wt_main_repo" rev-parse --verify "$wt_branch" &>/dev/null; then
+      printf "Delete local branch '%s' too? (Y/n): " "$wt_branch"
+      read -r do_delete_branch
+    fi
+  fi
+fi
+
 is_current=0
 [[ "$session" == "$current" ]] && is_current=1
 
+# worktree 削除処理（セッション削除より前に実行）
+if [[ -n "$wt_info" && ( -z "$do_delete_wt" || "$do_delete_wt" =~ ^[yY]$ ) ]]; then
+  active_file="$HOME/.config/tm-wt/active-server"
+  active=$(cat "$active_file" 2>/dev/null)
+  [[ "$active" == "$session" ]] && rm -f "$active_file"
+
+  git -C "$wt_main_repo" worktree remove --force "$wt_dir" 2>/dev/null || rm -rf "$wt_dir"
+  git -C "$wt_main_repo" worktree prune 2>/dev/null
+
+  ws_file="${wt_main_repo%/*}/$(basename "$wt_main_repo").worktrees/${session}.code-workspace"
+  [[ -f "$ws_file" ]] && rm -f "$ws_file"
+
+  if [[ -n "$wt_branch" && ( -z "$do_delete_branch" || "$do_delete_branch" =~ ^[yY]$ ) ]]; then
+    git -C "$wt_main_repo" branch -D "$wt_branch" 2>/dev/null || true
+    echo "✅ Deleted branch: $wt_branch"
+  fi
+
+  echo "✅ Deleted worktree: $wt_branch"
+fi
+
+# セッション削除処理
 if [[ "$session" == "main" ]]; then
   if (( is_current )); then
-    # 現在の main セッションを削除して再作成する場合
     other=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v "^main$" | head -1)
     echo "✅ Killed: ${session} (recreating...)"
     [[ -n "$other" ]] && tmux switch-client -t "=$other" 2>/dev/null
@@ -39,20 +116,17 @@ if [[ "$session" == "main" ]]; then
     tmux new-session -d -s "main" -c "$HOME"
     tmux switch-client -t "=main" 2>/dev/null
   else
-    # 別のセッションから main を削除して再作成する場合
     tmux kill-session -t "=main" 2>/dev/null
     tmux new-session -d -s "main" -c "$HOME"
     echo "✅ Killed: ${session} (recreated)"
     sleep 0.5
   fi
 elif (( is_current )); then
-  # 現在の非 main セッションを削除: main を確保し、ポップアップ/window 終了後に削除
   _ensure_main
   sn="$session"
   echo "✅ Killed: ${session}"
   tmux run-shell -d 1 "tmux switch-client -t '=main' 2>/dev/null; tmux kill-session -t '=${sn}' 2>/dev/null"
 else
-  # 非カレントセッションを削除する通常ケース
   tmux kill-session -t "=$session"
   echo "✅ Killed: $session"
   sleep 0.5

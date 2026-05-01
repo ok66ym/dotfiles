@@ -4,6 +4,33 @@
 
 ---
 
+## デフォルトブランチの自動検出
+
+`tm-wt` は worktree 作成時に自動的にベースブランチを検出します。
+
+1. `origin/HEAD` が設定されていればそのブランチ名を使用
+2. `origin/develop` → `origin/main` → `origin/master` の順でフォールバック
+3. いずれも存在しない場合は `main` を仮定
+
+CFO-Alpha（develop）も GitHub 標準（main）も設定不要で動作します。
+
+---
+
+## worktree 作成時のウィンドウ構成（全リポジトリ共通）
+
+worktree を新規作成すると、以下の 3 ウィンドウが自動作成されます：
+
+| ウィンドウ名 | 内容 |
+|------------|------|
+| `server`   | サーバー用（デフォルト 1 pane、フックで分割設定） |
+| `nvim`     | Neovim をワークツリールートで起動した状態 |
+| `cl`       | ワークツリーディレクトリの汎用シェル |
+
+`server` ウィンドウの pane 構成はリポジトリの `on-create.zsh` フックで自由に設定できます。
+フックがない場合は 1 pane のままです。
+
+---
+
 ## ディレクトリ構造
 
 ```
@@ -100,7 +127,8 @@ mkdir -p ~/.config/tm-wt/hooks/<リポジトリ名>
 session_name="$1"
 wtdir="$2"
 
-# ここにサーバー起動・pane 作成のコードを書く
+# ここに server ウィンドウの pane 設定・サーバー起動コードを書く
+# nvim / cl ウィンドウは tm-wt 本体が作成するため、ここでは不要
 ```
 
 3. `on-attach.zsh` を作成する（worktree セッションに入るたびに実行）
@@ -120,7 +148,7 @@ chezmoi add ~/.config/tm-wt/hooks/<リポジトリ名>/on-create.zsh
 chezmoi add ~/.config/tm-wt/hooks/<リポジトリ名>/on-attach.zsh
 ```
 
-### テンプレート: フロントサーバー（npm）
+### テンプレート: npm フロントサーバー（Vite / Next.js / webpack 等）
 
 `on-create.zsh`:
 ```zsh
@@ -128,7 +156,7 @@ chezmoi add ~/.config/tm-wt/hooks/<リポジトリ名>/on-attach.zsh
 session_name="$1"
 wtdir="$2"
 
-# pane 1.2: フロントサーバー用（右ペイン）
+# server ウィンドウを左右 2 pane に分割してフロントサーバーを右ペインで起動
 tmux split-window -t "${session_name}:1.1" -h -c "$wtdir"
 if [[ ! -d "$wtdir/node_modules" ]]; then
   tmux send-keys -t "${session_name}:1.2" "npm i && npm run dev" Enter
@@ -174,6 +202,68 @@ else
   tmux send-keys -t "${session_name}:1.2" "npm run dev" Enter 2>/dev/null
 fi
 echo "$session_name" > "$ACTIVE_SERVER_FILE"
+```
+
+### テンプレート: Rails サーバー（Ruby on Rails）
+
+`on-create.zsh`:
+```zsh
+#!/usr/bin/env zsh
+session_name="$1"
+wtdir="$2"
+
+# server ウィンドウを左右 2 pane に分割して rails server を右ペインで起動
+tmux split-window -t "${session_name}:1.1" -h -c "$wtdir"
+tmux send-keys -t "${session_name}:1.2" "bundle exec rails server -p 3000" Enter
+```
+
+`on-attach.zsh`:
+```zsh
+#!/usr/bin/env zsh
+session_name="$1"
+wtdir="$2"
+
+# pane 1.2 がなければ作成
+pane_count=$(tmux list-panes -t "${session_name}:1" 2>/dev/null | wc -l | tr -d ' ')
+if (( pane_count < 2 )); then
+  tmux split-window -t "${session_name}:1.1" -h -c "$wtdir"
+fi
+
+# サーバー起動中なら何もしない
+pane_cmd=$(tmux display-message -t "${session_name}:1.2" -p "#{pane_current_command}" 2>/dev/null)
+[[ "$pane_cmd" == "ruby" || "$pane_cmd" == "bundle" ]] && exit 0
+
+# サーバー起動
+tmux send-keys -t "${session_name}:1.2" "bundle exec rails server -p 3000" Enter 2>/dev/null
+```
+
+### テンプレート: Go サーバー
+
+`on-create.zsh`:
+```zsh
+#!/usr/bin/env zsh
+session_name="$1"
+wtdir="$2"
+
+tmux split-window -t "${session_name}:1.1" -h -c "$wtdir"
+tmux send-keys -t "${session_name}:1.2" "go run ./cmd/server/..." Enter
+```
+
+`on-attach.zsh`:
+```zsh
+#!/usr/bin/env zsh
+session_name="$1"
+wtdir="$2"
+
+pane_count=$(tmux list-panes -t "${session_name}:1" 2>/dev/null | wc -l | tr -d ' ')
+if (( pane_count < 2 )); then
+  tmux split-window -t "${session_name}:1.1" -h -c "$wtdir"
+fi
+
+pane_cmd=$(tmux display-message -t "${session_name}:1.2" -p "#{pane_current_command}" 2>/dev/null)
+[[ "$pane_cmd" == "go" || "$pane_cmd" == "__debug_bin" ]] && exit 0
+
+tmux send-keys -t "${session_name}:1.2" "go run ./cmd/server/..." Enter 2>/dev/null
 ```
 
 ---

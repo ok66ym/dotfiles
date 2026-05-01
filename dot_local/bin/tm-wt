@@ -278,9 +278,12 @@ _switch_session() {
   else
     tmux new-session -d -s "$name" -c "$wtdir"
     if (( to_worktree )); then
-      tmux new-window -d -n "misc" -c "$wtdir" -t "${name}"
+      tmux rename-window -t "${name}:1" "server"
+      tmux new-window -d -n "nvim" -c "$wtdir" -t "${name}"
+      tmux send-keys -t "${name}:nvim" "nvim ." Enter
+      tmux new-window -d -n "cl" -c "$wtdir" -t "${name}"
       tmux select-pane -t "${name}:1.1"
-      tmux select-window -t "${name}:1"
+      tmux select-window -t "${name}:nvim"
     fi
     tmux switch-client -t "=$name"
   fi
@@ -344,15 +347,20 @@ _create_worktree() {
 
   # 新規セッションを作成（worktree root）
   tmux new-session -d -s "$session_name" -c "$wtdir"
+  tmux rename-window -t "${session_name}:1" "server"
 
-  # リポジトリ固有の初期化フック（pane 分割・サーバー起動など）
+  # リポジトリ固有の初期化フック（server pane 分割・サーバー起動など）
   _run_hook "on-create" "$session_name" "$wtdir"
 
-  # Window 2: misc（その他操作用）
-  tmux new-window -d -n "misc" -c "$wtdir" -t "${session_name}"
+  # Window 2: nvim（ワークツリールートで Neovim を開く）
+  tmux new-window -d -n "nvim" -c "$wtdir" -t "${session_name}"
+  tmux send-keys -t "${session_name}:nvim" "nvim ." Enter
+
+  # Window 3: cl（ワークツリーディレクトリの汎用シェル）
+  tmux new-window -d -n "cl" -c "$wtdir" -t "${session_name}"
 
   tmux select-pane -t "${session_name}:1.1"
-  tmux select-window -t "${session_name}:1"
+  tmux select-window -t "${session_name}:nvim"
   tmux switch-client -t "=$session_name"
 
   echo ""

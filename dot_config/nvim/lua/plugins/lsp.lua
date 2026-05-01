@@ -1,22 +1,41 @@
 return {
+  -- nvim-lspconfig: サーバー定義（コマンド・デフォルト設定）を提供
   { "neovim/nvim-lspconfig" },
+
+  -- stylua など LSP 以外の Mason ツールを自動インストールする
+  {
+    "WhoIsSethDaniel/mason-tool-installer.nvim",
+    dependencies = { "williamboman/mason.nvim" },
+    config = function()
+      require("mason-tool-installer").setup({
+        ensure_installed = {
+          "stylua",  -- Lua フォーマッター（conform.nvim で使用・LSP サーバーではない）
+        },
+        auto_update  = false,
+        run_on_start = true,
+        start_delay  = 3000,
+      })
+    end,
+  },
+
   {
     "williamboman/mason.nvim",
-    cmd = "Mason",
+    cmd   = "Mason",
     build = ":MasonUpdate",
     config = function()
       require("mason").setup({
         ui = {
           border = "rounded",
-          icons = {
-            package_installed = "✓",
-            package_pending   = "➜",
+          icons  = {
+            package_installed   = "✓",
+            package_pending     = "➜",
             package_uninstalled = "✗",
           },
         },
       })
     end,
   },
+
   {
     "williamboman/mason-lspconfig.nvim",
     dependencies = {
@@ -26,90 +45,38 @@ return {
     },
     event = { "BufReadPre", "BufNewFile" },
     config = function()
-      -- mason-lspconfig の automatic_enable を無効化することで
-      -- lspconfig.*.setup() による管理と競合させない
+      -- 1. 全サーバー共通の capabilities / on_attach を設定
+      require("lsp").setup()
+
+      -- 2. サーバー別の追加設定（on_attach の明示的な上書きを含む）
+      require("lsp.lua_ls")()
+      require("lsp.typescript")()
+
+      -- 3. mason-lspconfig セットアップ
+      --    automatic_enable にホワイトリストを渡すことで、
+      --    stylua など LSP でないツールを誤って有効化しない。
+      --    ※ handlers はこのバージョンの mason-lspconfig では未サポートのため使わない
+      local lsp_servers = { "lua_ls", "ruby_lsp", "ts_ls" }
+
       require("mason-lspconfig").setup({
-        ensure_installed = {
-          "lua_ls",    -- Lua（Neovim 設定用）
-          "ruby_lsp",  -- Ruby
-          "ts_ls",     -- TypeScript / JavaScript
-        },
+        ensure_installed      = lsp_servers,
         automatic_installation = true,
-        automatic_enable = false,
+        -- whitelist 形式: このリストのサーバーだけを vim.lsp.enable() する
+        automatic_enable      = lsp_servers,
       })
 
-      local lspconfig = require("lspconfig")
-      local capabilities = require("cmp_nvim_lsp").default_capabilities()
+      -- 4. 診断表示の設定
+      require("lsp").setup_diagnostics()
 
-      local on_attach = function(_, bufnr)
-        local opts = { noremap = true, silent = true, buffer = bufnr }
-        -- Telescope 経由にすることで、候補選択後にウィンドウが自動で閉じる
-        -- reuse_win=true で既存ウィンドウを再利用（不要な分割を防ぐ）
-        vim.keymap.set("n", "gd", function()
-          require("telescope.builtin").lsp_definitions({ reuse_win = true })
-        end, opts)
-        vim.keymap.set("n", "gD",         vim.lsp.buf.declaration,                         opts)
-        vim.keymap.set("n", "gr",         "<cmd>Telescope lsp_references<CR>",             opts)
-        vim.keymap.set("n", "gi", function()
-          require("telescope.builtin").lsp_implementations({ reuse_win = true })
-        end, opts)
-        vim.keymap.set("n", "K",          vim.lsp.buf.hover,                               opts)
-        vim.keymap.set("n", "<Leader>ca", vim.lsp.buf.code_action,  opts)
-        vim.keymap.set("n", "<Leader>rn", vim.lsp.buf.rename,      opts)
-        vim.keymap.set("n", "[d",         vim.diagnostic.goto_prev, opts)
-        vim.keymap.set("n", "]d",         vim.diagnostic.goto_next,                        opts)
-        vim.keymap.set("n", "<Leader>dl", vim.diagnostic.open_float,                       opts)
-      end
-
-      -- Lua（Neovim API の型チェック）
-      lspconfig.lua_ls.setup({
-        capabilities = capabilities,
-        on_attach = on_attach,
-        settings = {
-          Lua = {
-            diagnostics = { globals = { "vim" } },
-            workspace = { checkThirdParty = false },
-            telemetry = { enable = false },
-          },
-        },
-      })
-
-      -- Ruby（ruby-lsp）
-      lspconfig.ruby_lsp.setup({
-        capabilities = capabilities,
-        on_attach = on_attach,
-      })
-
-      -- TypeScript / JavaScript / React
-      -- root_dir は tsconfig.json を優先し、worktree 環境でも front/ をルートとして検出する
-      lspconfig.ts_ls.setup({
-        capabilities = capabilities,
-        on_attach = on_attach,
-        filetypes = {
-          "typescript", "typescriptreact",
-          "javascript", "javascriptreact",
-        },
-        root_dir = lspconfig.util.root_pattern(
-          "tsconfig.json", "jsconfig.json", "package.json", ".git"
-        ),
-        single_file_support = true,
-      })
-
-      -- 診断表示設定
-      vim.diagnostic.config({
-        virtual_text = { prefix = "●" },
-        signs = true,
-        underline = true,
-        update_in_insert = false,
-        severity_sort = true,
-        float = { border = "rounded", source = "always" },
-      })
-
-      -- ホバー・シグネチャのボーダー
-      vim.lsp.handlers["textDocument/hover"] =
-        vim.lsp.with(vim.lsp.handlers.hover, { border = "rounded" })
-      vim.lsp.handlers["textDocument/signatureHelp"] =
-        vim.lsp.with(vim.lsp.handlers.signature_help, { border = "rounded" })
+      -- 5. BufReadPre 中に enable が走っても当該バッファの FileType が
+      --    まだ設定されていない場合があるため、スケジュール後に再トリガーする
+      vim.schedule(function()
+        local buf = vim.api.nvim_get_current_buf()
+        local ft  = vim.bo[buf].filetype
+        if ft ~= "" then
+          vim.api.nvim_exec_autocmds("FileType", { buffer = buf })
+        end
+      end)
     end,
   },
 }

@@ -21,8 +21,19 @@ return {
       -- 通知
       notifier = {
         enabled = true,
-        timeout = 3000,
-        style = "compact",
+        timeout = 4000,
+        style   = "compact",
+        level   = vim.log.levels.INFO,
+      },
+      -- 通知履歴ウィンドウのキーバインド（q / ESC で閉じる）
+      styles = {
+        notification_history = {
+          border = "rounded",
+          keys   = {
+            ["q"]     = "close",
+            ["<Esc>"] = "close",
+          },
+        },
       },
       -- インデントガイド
       indent = {
@@ -42,6 +53,9 @@ return {
           { section = "startup" },
         },
       },
+      -- snacks explorer（Obsidian vault ブラウズに使用）
+      -- replace_netrw = false: neo-tree が nvim . を処理するため置換しない
+      explorer = { replace_netrw = false },
       -- 大ファイルを開いた時にプラグインを無効化してパフォーマンスを確保
       bigfile = { enabled = true },
       -- ファイルを高速に開く

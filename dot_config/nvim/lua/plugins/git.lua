@@ -26,13 +26,13 @@ return {
           map("n", "[h", gs.prev_hunk, { desc = "前の変更ハンク" })
 
           -- ハンク操作
-          map("n", "<Leader>gs", gs.stage_hunk,      { desc = "ハンクをステージ" })
-          map("n", "<Leader>gr", gs.reset_hunk,      { desc = "ハンクをリセット" })
-          map("n", "<Leader>gp", gs.preview_hunk,    { desc = "ハンクのプレビュー" })
-          map("n", "<Leader>gb", gs.blame_line,      { desc = "行の Blame" })
-          map("n", "<Leader>gd", gs.diffthis,        { desc = "Diff 表示" })
-          map("n", "<Leader>gS", gs.stage_buffer,    { desc = "バッファ全体をステージ" })
-          map("n", "<Leader>gR", gs.reset_buffer,    { desc = "バッファ全体をリセット" })
+          map("n", "<Leader>gs", gs.stage_hunk,   { desc = "ハンクをステージ" })
+          map("n", "<Leader>gr", gs.reset_hunk,   { desc = "ハンクをリセット" })
+          map("n", "<Leader>gp", gs.preview_hunk, { desc = "ハンクのプレビュー" })
+          map("n", "<Leader>gb", gs.blame_line,   { desc = "行の Blame" })
+          map("n", "<Leader>gd", gs.diffthis,     { desc = "Diff 表示" })
+          map("n", "<Leader>gS", gs.stage_buffer, { desc = "バッファ全体をステージ" })
+          map("n", "<Leader>gR", gs.reset_buffer, { desc = "バッファ全体をリセット" })
 
           -- ビジュアルモードでのハンク操作
           map("v", "<Leader>gs", function() gs.stage_hunk({ vim.fn.line("."), vim.fn.line("v") }) end, { desc = "選択範囲をステージ" })
@@ -57,9 +57,9 @@ return {
     dependencies = { "nvim-lua/plenary.nvim" },
     cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewFileHistory" },
     keys = {
-      { "<Leader>gv", "<cmd>DiffviewOpen<cr>",           desc = "差分ビュー（全変更ファイル）" },
-      { "<Leader>gh", "<cmd>DiffviewFileHistory %<cr>",  desc = "現在ファイルの履歴" },
-      { "<Leader>gH", "<cmd>DiffviewFileHistory<cr>",    desc = "リポジトリ全体の履歴" },
+      { "<Leader>gv", "<cmd>DiffviewOpen<cr>",          desc = "差分ビュー（全変更ファイル）" },
+      { "<Leader>gh", "<cmd>DiffviewFileHistory %<cr>", desc = "現在ファイルの履歴" },
+      { "<Leader>gH", "<cmd>DiffviewFileHistory<cr>",   desc = "リポジトリ全体の履歴" },
     },
     config = function()
       local actions = require("diffview.actions")
@@ -75,6 +75,43 @@ return {
             { "n", "q", actions.close, { desc = "diffview を閉じる" } },
           },
         },
+      })
+    end,
+  },
+
+  -- GitHub PR・Issue を Neovim 内で確認・操作（要: gh CLI ログイン済み）
+  {
+    "pwntester/octo.nvim",
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+      "nvim-telescope/telescope.nvim",
+      "nvim-tree/nvim-web-devicons",
+    },
+    cmd = "Octo",
+    -- グローバルキーバインド（どのバッファからでも使える）
+    keys = {
+      { "<Leader>po", "<cmd>Octo pr edit<CR>",       desc = "PR: 現在ブランチを開く" },
+      { "<Leader>pp", "<cmd>Octo pr list<CR>",       desc = "PR: 一覧" },
+      { "<Leader>pf", "<cmd>Octo pr files<CR>",      desc = "PR: 変更ファイル一覧" },
+      { "<Leader>pc", "<cmd>Octo pr checks<CR>",     desc = "PR: CI チェック" },
+      { "<Leader>pr", "<cmd>Octo review start<CR>",  desc = "PR: レビュー開始" },
+      { "<Leader>il", "<cmd>Octo issue list<CR>",    desc = "Issue: 一覧" },
+      { "<Leader>ic", "<cmd>Octo issue create<CR>",  desc = "Issue: 作成" },
+    },
+    config = function()
+      if vim.fn.executable("gh") == 0 then
+        vim.notify(
+          "octo.nvim: gh CLI が見つかりません\n  brew install gh && gh auth login",
+          vim.log.levels.WARN,
+          { title = "GitHub CLI 未インストール" }
+        )
+        return
+      end
+      require("octo").setup({
+        suppress_missing_scope = { projects_v2 = true },
+        -- PR/Issue バッファ内のキーバインドは <LocalLeader>（\）プレフィックス
+        -- デフォルトのまま使用（TUTORIAL_05_github_pr.md 参照）
+        mappings_disable_default = false,
       })
     end,
   },

@@ -1,16 +1,16 @@
 #!/usr/bin/env zsh
 # CFO-Alpha: worktree 新規作成フック
 #
-# 作成されるウィンドウ構成:
-#   Window 1 (terminal):
+# 作成されるウィンドウ構成（tm-wt が共通ベースを作成、このフックは server window を担当）:
+#   Window "server":
 #     pane 1.1 — 汎用ターミナル（Claude Code 起動など）
 #     pane 1.2 — npm run watch（フロントサーバー）
-#   Window 2 (nvim):
-#     Neovim をワークツリールートで起動
+#   Window "nvim": ← tm-wt が作成
+#   Window "cl":   ← tm-wt が作成
 #
-# .code-workspace を生成して VSCode もバックグラウンドで起動する。
+# .code-workspace を生成する（tm-code / prefix+e で VSCode を開く際に利用）。
 #
-# 将来バックエンドサーバーを起動する場合は pane 1.3 を作成して
+# バックエンドサーバーを起動する場合は pane 1.3 を作成して
 # bundle exec rails server などを追加する
 #
 # 引数: $1=session_name  $2=wtdir
@@ -20,8 +20,7 @@ wtdir="$2"
 
 [[ -d "$wtdir/front" ]] || exit 0
 
-# .code-workspace を生成してVSCodeを開く
-# worktree list の先頭エントリが常にメインリポジトリ
+# .code-workspace を生成する（worktree list の先頭エントリが常にメインリポジトリ）
 main_repo=$(git -C "$wtdir" worktree list --porcelain 2>/dev/null | awk 'NR==1{print $2; exit}')
 if [[ -n "$main_repo" ]]; then
   wt_name=$(basename "$wtdir")
@@ -36,7 +35,6 @@ if [[ -n "$main_repo" ]]; then
   }
 }
 EOF
-  /usr/bin/open -a "Visual Studio Code" "$ws_file"
 fi
 
 # pane 1.2: フロントサーバー用（右ペイン）
@@ -52,9 +50,4 @@ fi
 mkdir -p "$HOME/.config/tm-wt"
 echo "$session_name" > "$HOME/.config/tm-wt/active-server"
 
-# Window 2: Neovim をワークツリールートで起動
-tmux new-window -t "${session_name}" -n "nvim" -c "$wtdir"
-tmux send-keys -t "${session_name}:nvim" "nvim ." Enter
-
-# 起動直後は Neovim window にフォーカスを移す
-tmux select-window -t "${session_name}:nvim"
+# nvim / cl ウィンドウは tm-wt 本体が作成する

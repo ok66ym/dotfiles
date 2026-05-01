@@ -3,10 +3,9 @@ return {
     "folke/persistence.nvim",
     lazy = false,
     opts = {
-      -- buffers と globals を除外:
-      --   buffers: ウィンドウに表示していないバッファも保存してしまう
-      --   globals: プラグインのグローバル状態が意図せず復元される
-      options = { "curdir", "folds", "tabpages", "winpos", "winsize" },
+      -- buffers: 開いていた全バッファを保存・復元する（これがないと最後の1ファイルしか復元されない）
+      -- globals は除外: プラグインのグローバル状態が意図せず復元されるのを防ぐ
+      options = { "buffers", "curdir", "folds", "tabpages", "winpos", "winsize" },
     },
     keys = {
       { "<Leader>qs", function() require("persistence").load() end,                desc = "セッション復元（現在ディレクトリ）" },
@@ -14,7 +13,8 @@ return {
       { "<Leader>qd", function() require("persistence").stop() end,                desc = "セッション保存を停止（このセッション）" },
       { "<Leader>qc", function()
           -- 壊れたセッションや不要なファイルが残った時のリセット用
-          local session = require("persistence").get()
+          -- persistence.nvim の正しい API は current()（get() は存在しない）
+          local session = require("persistence").current()
           if session and vim.fn.filereadable(session) == 1 then
             vim.fn.delete(session)
             vim.notify("セッションをクリアしました", vim.log.levels.INFO)
@@ -27,30 +27,53 @@ return {
       vim.api.nvim_create_autocmd("VimLeavePre", {
         group = vim.api.nvim_create_augroup("persistence_cleanup", { clear = true }),
         callback = function()
+          -- 特定ファイルを引数に起動された場合（claude-prompt-edit の一時ファイル等）は
+          -- セッションを保存しない。上書きされると直前の作業セッションが失われる。
+          local argc = vim.fn.argc(-1)
+          local is_dir_arg = argc == 1 and vim.fn.isdirectory(vim.fn.argv(0)) == 1
+          if argc ~= 0 and not is_dir_arg then
+            pcall(require("persistence").stop)
+            return
+          end
+
           -- 1. neo-tree を閉じる（neo-tree バッファをセッションに含めない）
           pcall(function()
             require("neo-tree.command").execute({ action = "close" })
           end)
 
-          -- 2. 現在ウィンドウに表示中のバッファを収集する
-          local win_bufs = {}
-          for _, win in ipairs(vim.api.nvim_list_wins()) do
-            win_bufs[vim.api.nvim_win_get_buf(win)] = true
-          end
-
-          -- 3. ウィンドウに表示されていない listed バッファを全て削除する
-          --    :bd / close_buffer の失敗などで listed のまま残ったバッファを除去し
-          --    セッションに「現在表示中のファイルのみ」が保存されるようにする
+          -- 2. ディレクトリバッファを削除（nvim . で開いた際の残留バッファ）
           for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-            if not win_bufs[buf] and vim.fn.buflisted(buf) == 1 then
+            if vim.fn.isdirectory(vim.fn.bufname(buf)) == 1 then
               pcall(vim.api.nvim_buf_delete, buf, { force = true })
             end
           end
 
-          -- 4. ディレクトリバッファを削除（nvim . で開いた際の残留バッファ）
+          -- 3. 存在しないファイル・一時ファイル・Obsidian Vault をセッションから除外
+          --    /tmp/ 以下の一時ファイル（claude-prompt-edit 等）や Obsidian ノートが
+          --    プロジェクトのタブに残るのを防ぐ
+          local tmp_patterns = {
+            "/tmp/", "/private/tmp/", "/var/folders/",
+            "/Users/yumac/src/github.com/ok66ym/obsidian/",
+          }
           for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-            if vim.fn.isdirectory(vim.fn.bufname(buf)) == 1 then
-              pcall(vim.api.nvim_buf_delete, buf, { force = true })
+            if vim.fn.buflisted(buf) == 1 then
+              local fname = vim.fn.fnamemodify(vim.fn.bufname(buf), ":p")
+              if fname ~= "" and vim.fn.isdirectory(fname) == 0 then
+                -- ディスク上に存在しないファイルは除外
+                local should_remove = vim.fn.filereadable(fname) == 0
+                -- 一時ディレクトリのファイルは除外
+                if not should_remove then
+                  for _, pat in ipairs(tmp_patterns) do
+                    if vim.startswith(fname, pat) then
+                      should_remove = true
+                      break
+                    end
+                  end
+                end
+                if should_remove then
+                  pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                end
+              end
             end
           end
         end,

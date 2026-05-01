@@ -1,0 +1,15 @@
+#!/usr/bin/env zsh
+# tm-status-length
+# 現在の tmux セッション名の長さに合わせて status-left-length を更新する。
+# client-session-changed / session-created / session-renamed フックから呼ばれる。
+# status-left のフォーマットは ' #S  ' (先頭スペース1 + 末尾スペース2 = +3)。
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.local/share/aquaproj-aqua/bin:$HOME/.local/bin:$PATH"
+
+name=$(tmux display-message -p '#{session_name}' 2>/dev/null)
+[[ -z "$name" ]] && exit 0
+
+len=$(( ${#name} + 3 ))
+(( len < 10 )) && len=10
+
+tmux set-option status-left-length "$len" 2>/dev/null
